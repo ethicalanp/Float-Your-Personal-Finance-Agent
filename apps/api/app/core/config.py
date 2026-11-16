@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
+    # PostgreSQL connection URL; supplied through the environment.
+    database_url: str | None = None
+    
     @property
     def docs_enabled(self) -> bool:
         """Interactive API docs are switched off in production."""
