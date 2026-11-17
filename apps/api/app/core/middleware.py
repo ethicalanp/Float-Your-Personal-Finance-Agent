@@ -4,7 +4,7 @@ import sys
 import time
 import uuid
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -20,7 +20,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_payload: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -48,8 +48,8 @@ def setup_json_logging(log_level: str = "INFO") -> logging.Logger:
         handler.setFormatter(JsonFormatter())
         root_logger.addHandler(handler)
     else:
-        for handler in root_logger.handlers:
-            handler.setFormatter(JsonFormatter())
+        for existing_handler in root_logger.handlers:
+            existing_handler.setFormatter(JsonFormatter())
 
     return logging.getLogger("pfa.api")
 

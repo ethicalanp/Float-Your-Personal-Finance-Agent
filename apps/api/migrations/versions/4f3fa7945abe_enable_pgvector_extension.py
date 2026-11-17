@@ -21,5 +21,4 @@ def downgrade() -> None:
     Removing it could affect other tables or applications
     that depend on pgvector.
     """
-    pass
 

@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
     "fastapi",
     "pydantic-settings",
+    "email-validator",
     "uvicorn[standard]",
     "sqlalchemy",
     "asyncpg",
@@ -26,6 +27,9 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.setuptools.packages.find]
 where = ["."]

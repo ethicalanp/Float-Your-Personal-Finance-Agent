@@ -1,11 +1,11 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
 
-from app.core.errors import ConflictException, UnauthorizedException, ValidationException
+from app.core.errors import ConflictException, UnauthorizedException
 from app.core.security import (
     CurrentUser,
     create_access_token,
@@ -66,7 +66,7 @@ async def register(req: RegisterRequest) -> AuthTokenResponse:
 
     user_id = str(uuid.uuid4())
     pw_hash = hash_password(req.password)
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     _USERS_DB[email_lower] = {
         "user_id": user_id,
@@ -140,7 +140,7 @@ async def get_my_profile(current_user: CurrentUser = Depends(get_current_user)) 
         "terms_accepted": False,
         "ai_data_processing_consent": False,
         "consent_version": "v1.0",
-        "consented_at": datetime.now(timezone.utc).isoformat(),
+        "consented_at": datetime.now(UTC).isoformat(),
     })
 
     return UserProfileResponse(
@@ -157,7 +157,7 @@ async def update_consent(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Update user privacy and AI data processing consent."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     _CONSENTS_DB[current_user.user_id] = {
         "terms_accepted": req.terms_accepted,
         "ai_data_processing_consent": req.ai_data_processing_consent,

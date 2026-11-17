@@ -4,10 +4,9 @@ import hmac
 import json
 import secrets
 import time
-from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import Depends, Header
+from fastapi import Header
 from pydantic import BaseModel
 
 from app.core.config import get_settings
@@ -46,7 +45,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             iterations=iterations,
         )
         return hmac.compare_digest(computed_key, expected_key)
-    except Exception:
+    except ValueError:
         return False
 
 
@@ -84,7 +83,7 @@ def create_access_token(
     encoded_header = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
     encoded_payload = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
 
-    signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
+    signing_input = f"{encoded_header}.{encoded_payload}".encode()
     signature = hmac.new(
         settings.jwt_secret_key.encode("utf-8"),
         signing_input,
@@ -103,7 +102,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
         raise UnauthorizedException("Invalid token format")
 
     encoded_header, encoded_payload, encoded_signature = parts
-    signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
+    signing_input = f"{encoded_header}.{encoded_payload}".encode()
 
     expected_signature = hmac.new(
         settings.jwt_secret_key.encode("utf-8"),

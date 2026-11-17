@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -10,7 +10,10 @@ from app.core.security import CurrentUser, get_current_user
 from app.services.complaint_drafter import draft_fraud_complaint
 from app.services.data_sanitizer import mask_sensitive_data
 from app.services.scam_detector import analyze_scam_message
-from app.services.verified_contacts import get_all_verified_contacts, search_verified_contacts
+from app.services.verified_contacts import (
+    get_all_verified_contacts,
+    search_verified_contacts,
+)
 
 router = APIRouter(prefix="/protect", tags=["Protect — Financial Scam Detection & Recovery"])
 
@@ -29,7 +32,7 @@ def record_audit(action: str, resource_type: str, resource_id: str | None = None
         "resource_type": resource_type,
         "resource_id": resource_id,
         "metadata": metadata or {},
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     })
 
 
@@ -45,16 +48,16 @@ class CheckFeedbackRequest(BaseModel):
 
 class ScamSampleSubmission(BaseModel):
     text: str
-    language: str = Field(..., example="manglish")  # en, ml, manglish
+    language: str = Field(..., json_schema_extra={"example": "manglish"})  # en, ml, manglish
     is_scam: bool = True
-    scam_type: str = Field("phishing", example="electricity_bill_scam")
+    scam_type: str = Field("phishing", json_schema_extra={"example": "electricity_bill_scam"})
     source: str = "user_submission"
 
 
 class CreateRecoveryCaseRequest(BaseModel):
-    scam_type: str = Field("upi_fraud", example="upi_fraud")
-    amount_lost: float = Field(0.0, example=25000.0)
-    platform: str = Field("WhatsApp", example="WhatsApp")
+    scam_type: str = Field("upi_fraud", json_schema_extra={"example": "upi_fraud"})
+    amount_lost: float = Field(0.0, json_schema_extra={"example": 25000.0})
+    platform: str = Field("WhatsApp", json_schema_extra={"example": "WhatsApp"})
     incident_summary: str = Field(..., description="Chronological explanation of what happened")
 
 
@@ -88,7 +91,7 @@ async def check_scam_message(
         "user_id": current_user.user_id if current_user else None,
         "message_masked": masked_msg,
         "result": result,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "feedback": None,
     }
     _CHECK_LOGS_DB[check_id] = log_entry
@@ -121,7 +124,7 @@ async def submit_check_feedback(
     check["feedback"] = {
         "is_accurate": req.is_accurate,
         "notes": req.notes,
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "submitted_at": datetime.now(UTC).isoformat(),
     }
 
     record_audit(
@@ -149,7 +152,7 @@ async def submit_scam_sample(
         "is_scam": sample.is_scam,
         "scam_type": sample.scam_type,
         "source": sample.source,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     _SAMPLES_DB.append(record)
 
@@ -183,7 +186,7 @@ async def create_recovery_case(
 ) -> dict[str, Any]:
     """Initiate a first-hour fraud recovery case with an actionable recovery checklist."""
     case_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     masked_summary = mask_sensitive_data(req.incident_summary)
 
     checklist = [
@@ -244,7 +247,7 @@ async def update_recovery_case(
             if item["step"] == req.completed_step:
                 item["status"] = "completed"
 
-    case["updated_at"] = datetime.now(timezone.utc).isoformat()
+    case["updated_at"] = datetime.now(UTC).isoformat()
     return case
 
 

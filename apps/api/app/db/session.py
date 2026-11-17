@@ -16,7 +16,6 @@ from app.core.config import get_settings
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
-    pass
 
 
 @lru_cache(maxsize=1)
@@ -27,7 +26,7 @@ def get_async_engine() -> AsyncEngine:
         raise RuntimeError("PFA_DATABASE_URL is not configured.")
 
     url = settings.database_url
-    if not (url.startswith("postgresql+asyncpg://") or url.startswith("sqlite+aiosqlite://")):
+    if not url.startswith(("postgresql+asyncpg://", "sqlite+aiosqlite://")):
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql+pg8000://"):

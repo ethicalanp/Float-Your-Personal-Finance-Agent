@@ -4,13 +4,13 @@ from app.models.protect import AuditTrail, RecoveryCase, ScamCheckLog, ScamSampl
 from app.models.user import Consent, User
 
 __all__ = [
-    "Base",
-    "User",
-    "Consent",
     "Account",
-    "Transaction",
-    "ScamCheckLog",
-    "RecoveryCase",
-    "ScamSample",
     "AuditTrail",
+    "Base",
+    "Consent",
+    "RecoveryCase",
+    "ScamCheckLog",
+    "ScamSample",
+    "Transaction",
+    "User",
 ]
