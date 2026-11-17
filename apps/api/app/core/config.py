@@ -25,7 +25,12 @@ class Settings(BaseSettings):
 
     # PostgreSQL connection URL; supplied through the environment.
     database_url: str | None = None
-    
+
+    # Security & JWT configuration
+    jwt_secret_key: str = "float-personal-finance-agent-secret-key-min32chars"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440
+
     @property
     def docs_enabled(self) -> bool:
         """Interactive API docs are switched off in production."""
