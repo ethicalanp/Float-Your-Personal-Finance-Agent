@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.core.errors import BadRequestException, NotFoundException
@@ -19,12 +19,12 @@ _SEEN_FINGERPRINTS: set[str] = set()
 
 
 class CreateAccountRequest(BaseModel):
-    name: str = Field(..., example="Primary HDFC Savings")
-    account_type: str = Field("savings", example="savings")  # savings, checking, credit_card
-    institution_name: str = Field("HDFC Bank", example="HDFC Bank")
-    account_number_mask: str = Field("****1234", example="****1234")
-    currency: str = Field("INR", example="INR")
-    initial_balance: float = Field(0.0, example=50000.0)
+    name: str = Field(..., json_schema_extra={"example": "Primary HDFC Savings"})
+    account_type: str = Field("savings", json_schema_extra={"example": "savings"})  # savings, checking, credit_card
+    institution_name: str = Field("HDFC Bank", json_schema_extra={"example": "HDFC Bank"})
+    account_number_mask: str = Field("****1234", json_schema_extra={"example": "****1234"})
+    currency: str = Field("INR", json_schema_extra={"example": "INR"})
+    initial_balance: float = Field(0.0, json_schema_extra={"example": 50000.0})
 
 
 class AccountResponse(BaseModel):
@@ -41,7 +41,7 @@ class AccountResponse(BaseModel):
 
 class UploadStatementRequest(BaseModel):
     account_id: str
-    format: str = Field("csv", example="csv")  # csv or sms
+    format: str = Field("csv", json_schema_extra={"example": "csv"})  # csv or sms
     content: str = Field(..., description="Raw text of the CSV or bank SMS alert")
 
 
@@ -60,9 +60,9 @@ async def create_account(
 ) -> AccountResponse:
     """Create a new financial account (savings, checking, credit card)."""
     acc_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
-    account = {
+    account: dict[str, Any] = {
         "id": acc_id,
         "user_id": current_user.user_id,
         "name": req.name,

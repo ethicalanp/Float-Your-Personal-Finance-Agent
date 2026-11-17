@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.services.data_sanitizer import mask_sensitive_data
@@ -25,7 +25,7 @@ def draft_fraud_complaint(
     }
 
     cyber_portal = search_verified_contacts("National Cyber Crime")[0]
-    date_formatted = incident_date or datetime.now(timezone.utc).strftime("%d-%B-%Y")
+    date_formatted = incident_date or datetime.now(UTC).strftime("%d-%B-%Y")
     masked_desc = mask_sensitive_data(description)
 
     # Formal Bank Email Draft

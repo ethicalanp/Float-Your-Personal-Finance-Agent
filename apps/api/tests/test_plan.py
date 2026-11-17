@@ -1,12 +1,13 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.core.security import create_access_token
+from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
 from app.services.categorizer import categorize_transaction
 from app.services.data_sanitizer import mask_sensitive_data
 from app.services.deduplication import compute_transaction_fingerprint
-from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
 from app.services.statement_parser import parse_csv_statement, parse_sms_statement
 
 
@@ -55,7 +56,7 @@ def test_transaction_categorization() -> None:
 
 
 def test_deduplication_fingerprint() -> None:
-    dt = datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc)
+    dt = datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC)
     fp1 = compute_transaction_fingerprint("acc-1", dt, 500.0, "debit", "Swiggy order")
     fp2 = compute_transaction_fingerprint("acc-1", dt, 500.0, "debit", "Swiggy   ORDER ")
     fp3 = compute_transaction_fingerprint("acc-1", dt, 501.0, "debit", "Swiggy order")

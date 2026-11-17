@@ -52,7 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content=format_error_response(
                 code="VALIDATION_ERROR",
                 message="Request payload validation failed",
-                details=exc.errors(),
+                details=list(exc.errors()),
                 request_id=req_id,
             ),
         )

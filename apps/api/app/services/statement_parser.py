@@ -1,7 +1,7 @@
 import csv
 import io
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.services.categorizer import categorize_transaction
@@ -26,11 +26,11 @@ def _parse_date(date_str: str) -> datetime:
     for fmt in formats:
         try:
             parsed = datetime.strptime(date_str, fmt)
-            return parsed.replace(tzinfo=timezone.utc)
+            return parsed.replace(tzinfo=UTC)
         except ValueError:
             continue
     # Default to current UTC time if date parsing fails
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_csv_statement(content_str: str, account_id: str) -> list[dict[str, Any]]:
@@ -105,9 +105,12 @@ def parse_csv_statement(content_str: str, account_id: str) -> list[dict[str, Any
             clean_amt = re.sub(r'[^\d.]', '', row[amount_col])
             amt = float(clean_amt) if clean_amt else 0.0
             t_type = "debit"
-            if type_col != -1 and type_col < len(row):
-                if any(k in row[type_col].lower() for k in ["cr", "credit", "deposit"]):
-                    t_type = "credit"
+            if (
+                type_col != -1
+                and type_col < len(row)
+                and any(k in row[type_col].lower() for k in ["cr", "credit", "deposit"])
+            ):
+                t_type = "credit"
             if t_type == "credit":
                 credit_val = amt
             else:
@@ -168,7 +171,7 @@ def parse_sms_statement(sms_text: str, account_id: str) -> dict[str, Any] | None
 
     category, merchant = categorize_transaction(merchant_raw or text, t_type)
     masked_text = mask_sensitive_data(text)
-    tx_date = datetime.now(timezone.utc)
+    tx_date = datetime.now(UTC)
     fingerprint = compute_transaction_fingerprint(account_id, tx_date, amount, t_type, text)
 
     return {
