@@ -1,4 +1,3 @@
-
 from logging.config import fileConfig
 
 from alembic import context
@@ -18,10 +17,15 @@ settings = get_settings()
 if not settings.database_url:
     raise RuntimeError("PFA_DATABASE_URL is not configured.")
 
+# For Alembic synchronous execution, ensure a sync driver dialect is used.
+db_url = settings.database_url
+if db_url.startswith("postgresql+asyncpg://"):
+    db_url = db_url.replace("postgresql+asyncpg://", "postgresql+pg8000://", 1)
+
 # Escape percent signs for ConfigParser interpolation.
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url.replace("%", "%%"),
+    db_url.replace("%", "%%"),
 )
 
 # SQLAlchemy metadata used by Alembic autogenerate.
