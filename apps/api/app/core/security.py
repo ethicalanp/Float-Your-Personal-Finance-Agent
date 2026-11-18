@@ -6,11 +6,14 @@ import secrets
 import time
 from typing import Any
 
-from fastapi import Header
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from app.core.config import get_settings
 from app.core.errors import UnauthorizedException
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -131,17 +134,14 @@ class CurrentUser(BaseModel):
     consent_given: bool = False
 
 
-async def get_current_user(authorization: str | None = Header(None)) -> CurrentUser:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> CurrentUser:
     """Dependency to extract and validate the authenticated user from the Authorization header."""
-    if not authorization:
+    if credentials is None:
         raise UnauthorizedException("Missing Authorization header")
 
-    parts = authorization.split(" ")
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise UnauthorizedException("Authorization header must be 'Bearer <token>'")
-
-    token = parts[1]
-    payload = decode_access_token(token)
+    payload = decode_access_token(credentials.credentials)
 
     sub = payload.get("sub")
     if not sub:
