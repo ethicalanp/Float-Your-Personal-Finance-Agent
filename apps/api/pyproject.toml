@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings",
     "uvicorn[standard]",
     "sqlalchemy",
+    "pgvector",
     "asyncpg",
     "pg8000",
     "alembic",
