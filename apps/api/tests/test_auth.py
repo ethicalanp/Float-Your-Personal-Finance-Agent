@@ -72,3 +72,13 @@ def test_unauthorized_endpoints(client: TestClient) -> None:
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "UNAUTHORIZED"
     assert "request_id" in res.json()["error"]
+
+
+def test_openapi_declares_bearer_auth(client: TestClient) -> None:
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    schema = response.json()
+    bearer_scheme = schema["components"]["securitySchemes"]["HTTPBearer"]
+    assert bearer_scheme == {"type": "http", "scheme": "bearer"}
+    assert {"HTTPBearer": []} in schema["paths"]["/api/v1/auth/me"]["get"]["security"]
