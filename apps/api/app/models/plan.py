@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -28,6 +28,10 @@ from app.models.enums import (
     TransactionType,
     enum_type,
 )
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 class Account(Base):

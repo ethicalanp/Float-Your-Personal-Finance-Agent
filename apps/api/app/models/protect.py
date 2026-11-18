@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -25,6 +25,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 from app.models.enums import AuditActor, CaseStatus, LanguageCode, RiskTier, enum_type
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 class ScamCheckLog(Base):

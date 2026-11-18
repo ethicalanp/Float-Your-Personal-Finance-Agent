@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
@@ -16,6 +16,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 from app.models.enums import ConsentType, enum_type
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 class User(Base):
