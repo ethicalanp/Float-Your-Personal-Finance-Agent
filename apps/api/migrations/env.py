@@ -11,24 +11,17 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Load the database URL from the existing application settings.
 settings = get_settings()
 
 if not settings.database_url:
     raise RuntimeError("PFA_DATABASE_URL is not configured.")
 
-# For Alembic synchronous execution, ensure a sync driver dialect is used.
-db_url = settings.database_url
-if db_url.startswith("postgresql+asyncpg://"):
-    db_url = db_url.replace("postgresql+asyncpg://", "postgresql+pg8000://", 1)
-
-# Escape percent signs for ConfigParser interpolation.
+# Standard Psycopg 3 database URL works for both async and sync execution
 config.set_main_option(
     "sqlalchemy.url",
-    db_url.replace("%", "%%"),
+    settings.database_url.replace("%", "%%"),
 )
 
-# SQLAlchemy metadata used by Alembic autogenerate.
 target_metadata = Base.metadata
 
 
