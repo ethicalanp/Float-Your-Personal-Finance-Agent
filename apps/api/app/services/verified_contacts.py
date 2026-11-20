@@ -8,7 +8,9 @@ VERIFIED_DIRECTORY: list[dict[str, Any]] = [
         "alternate_number": "112",
         "website": "https://cybercrime.gov.in",
         "reporting_channel": "Citizen Financial Cyber Fraud Reporting and Management System (CFCFRMS)",
-        "priority_notice": "Call 1930 within the golden first hour to trigger immediate inter-bank freeze of stolen funds.",
+        "priority_notice": (
+            "Call 1930 within the golden first hour to trigger immediate inter-bank freeze of stolen funds."
+        ),
     },
     {
         "institution": "State Bank of India (SBI)",
