@@ -60,7 +60,7 @@ class ScamCheckLog(Base):
         nullable=False,
     )
     indicators: Mapped[dict[str, Any] | list[Any]] = mapped_column(
-        JSONB, default=list, server_default=sql_text("'[]'::jsonb"), nullable=False
+        JSONB, default=list, server_default=sql_text("'[]'"), nullable=False
     )
     model_version: Mapped[str | None] = mapped_column(String(64))
     is_scam: Mapped[bool] = mapped_column(default=False, server_default=sql_text("false"), nullable=False)
@@ -89,7 +89,9 @@ class RecoveryCase(Base):
     incident_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    scam_type: Mapped[str] = mapped_column(String(64), default="phishing", server_default=sql_text("'phishing'"), nullable=False)
+    scam_type: Mapped[str] = mapped_column(
+        String(64), default="phishing", server_default=sql_text("'phishing'"), nullable=False
+    )
     amount_lost: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), server_default=sql_text("0"), nullable=False
     )
@@ -104,7 +106,7 @@ class RecoveryCase(Base):
         nullable=False,
     )
     steps_completed: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, default=list, server_default=sql_text("'[]'::jsonb"), nullable=False
+        JSONB, default=list, server_default=sql_text("'[]'"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -151,7 +153,9 @@ class ScamSample(Base):
     text_hash: Mapped[str] = mapped_column(CHAR(64), unique=True, nullable=False)
     language: Mapped[LanguageCode] = mapped_column(enum_type(LanguageCode, "language_code"), nullable=False)
     is_scam: Mapped[bool] = mapped_column(default=True, server_default=sql_text("true"), nullable=False)
-    scam_type: Mapped[str] = mapped_column(String(64), default="unknown", server_default=sql_text("'unknown'"), nullable=False)
+    scam_type: Mapped[str] = mapped_column(
+        String(64), default="unknown", server_default=sql_text("'unknown'"), nullable=False
+    )
     source: Mapped[str] = mapped_column(
         String(64), default="user_submission", server_default=sql_text("'user_submission'"), nullable=False
     )
@@ -182,7 +186,7 @@ class AuditTrail(Base):
     resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
     resource_id: Mapped[str | None] = mapped_column(String(64))
     metadata_json: Mapped[dict[str, Any]] = mapped_column(
-        "metadata", JSONB, default=dict, server_default=sql_text("'{}'::jsonb"), nullable=False
+        "metadata", JSONB, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

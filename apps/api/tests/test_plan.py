@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.security import create_access_token
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
 from app.services.categorizer import categorize_transaction
 from app.services.data_sanitizer import mask_sensitive_data
@@ -12,11 +11,16 @@ from app.services.statement_parser import parse_csv_statement, parse_sms_stateme
 
 
 @pytest.fixture
-def auth_headers() -> dict[str, str]:
-    token = create_access_token(
-        subject="test-user-uuid",
-        claims={"email": "plan_test@example.com", "full_name": "Test User", "consent_given": True},
-    )
+def auth_headers(client: TestClient) -> dict[str, str]:
+    reg_data = {
+        "email": "plan_test@example.com",
+        "password": "StrongPassword123!",
+        "full_name": "Test Plan User",
+        "terms_accepted": True,
+        "ai_data_processing_consent": True,
+    }
+    res = client.post("/api/v1/auth/register", json=reg_data)
+    token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -137,6 +141,10 @@ def test_plan_api_flow(client: TestClient, auth_headers: dict[str, str]) -> None
     )
     assert upload_res.status_code == 200
     assert upload_res.json()["imported_count"] == 2
+    for sample in upload_res.json()["sample_imported"]:
+        assert sample["id"] is not None
+        assert sample["id"] != "None"
+        assert len(sample["id"]) >= 32
 
     # 3. Duplicate upload should skip
     dup_res = client.post(
@@ -156,3 +164,30 @@ def test_plan_api_flow(client: TestClient, auth_headers: dict[str, str]) -> None
     insights_res = client.get("/api/v1/plan/insights", headers=auth_headers)
     assert insights_res.status_code == 200
     assert "balance_buffer" in insights_res.json()
+
+
+def test_account_creation_rejects_unknown_type_and_currency(
+    client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
+    payload = {
+        "name": "Unsupported account",
+        "institution_name": "Test Bank",
+        "account_number_mask": "****1234",
+        "initial_balance": 0,
+    }
+
+    invalid_type = client.post(
+        "/api/v1/plan/accounts",
+        headers=auth_headers,
+        json={**payload, "account_type": "investment"},
+    )
+    assert invalid_type.status_code == 400
+    assert "Invalid account_type" in invalid_type.json()["error"]["message"]
+
+    unsupported_currency = client.post(
+        "/api/v1/plan/accounts",
+        headers=auth_headers,
+        json={**payload, "account_type": "savings", "currency": "USD"},
+    )
+    assert unsupported_currency.status_code == 422

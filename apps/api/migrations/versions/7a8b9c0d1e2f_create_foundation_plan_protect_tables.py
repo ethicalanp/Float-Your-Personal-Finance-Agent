@@ -33,7 +33,13 @@ def upgrade() -> None:
     op.create_table(
         "user_consents",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column("user_id", sa.String(length=36), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True),
+        sa.Column(
+            "user_id",
+            sa.String(length=36),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            unique=True,
+        ),
         sa.Column("terms_accepted", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("consent_version", sa.String(length=32), nullable=False, server_default="v1.0"),
         sa.Column("ai_data_processing_consent", sa.Boolean(), nullable=False, server_default=sa.false()),

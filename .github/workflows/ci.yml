@@ -53,9 +53,16 @@ jobs:
         run: |
           mypy app --ignore-missing-imports
 
+      - name: Run Database Migrations
+        env:
+          PFA_APP_ENV: test
+          PFA_DATABASE_URL: postgresql+psycopg://float:float_test_password@localhost:5432/float
+        run: |
+          alembic upgrade head
+
       - name: Run Pytest Suite
         env:
           PFA_APP_ENV: test
-          PFA_DATABASE_URL: postgresql+asyncpg://float:float_test_password@localhost:5432/float
+          PFA_DATABASE_URL: postgresql+psycopg://float:float_test_password@localhost:5432/float
         run: |
           pytest -v --tb=short

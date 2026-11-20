@@ -26,7 +26,7 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(
-            "normalized_email = lower(btrim(email))",
+            "normalized_email = lower(trim(email))",
             name="ck_users_normalized_email",
         ),
     )

@@ -1,16 +1,20 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.security import create_access_token
 from app.services.scam_detector import analyze_scam_message, detect_language
 
 
 @pytest.fixture
-def auth_headers() -> dict[str, str]:
-    token = create_access_token(
-        subject="protect-user-uuid",
-        claims={"email": "protect_test@example.com", "full_name": "Protect Tester", "consent_given": True},
-    )
+def auth_headers(client: TestClient) -> dict[str, str]:
+    reg_data = {
+        "email": "protect_test@example.com",
+        "password": "StrongPassword123!",
+        "full_name": "Protect Tester",
+        "terms_accepted": True,
+        "ai_data_processing_consent": True,
+    }
+    res = client.post("/api/v1/auth/register", json=reg_data)
+    token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -26,7 +30,10 @@ def test_language_detection() -> None:
 
 def test_scam_detector_multilingual() -> None:
     # 1. English Scam
-    en_scam = "URGENT: Your SBI account is suspended! Update KYC immediately by clicking http://bit.ly/sbi-verify or share OTP."
+    en_scam = (
+        "URGENT: Your SBI account is suspended! Update KYC immediately by clicking "
+        "http://bit.ly/sbi-verify or share OTP."
+    )
     res_en = analyze_scam_message(en_scam)
     assert res_en["is_scam"] is True
     assert res_en["risk_tier"] in ["HIGH", "CRITICAL"]
@@ -53,9 +60,10 @@ def test_scam_detector_multilingual() -> None:
 
 
 def test_protect_api_endpoints(client: TestClient, auth_headers: dict[str, str]) -> None:
-    # 1. Scam Check API
+    # 1. Scam Check API (authenticated)
     check_res = client.post(
         "/api/v1/protect/check",
+        headers=auth_headers,
         json={"message": "Urgent: electricity cut aakum. APK install cheyyu http://scam.apk"},
     )
     assert check_res.status_code == 200
@@ -65,13 +73,15 @@ def test_protect_api_endpoints(client: TestClient, auth_headers: dict[str, str])
     # 2. Feedback API
     fb_res = client.post(
         "/api/v1/protect/check/feedback",
+        headers=auth_headers,
         json={"check_id": check_id, "is_accurate": True, "notes": "Accurate detection of APK scam"},
     )
     assert fb_res.status_code == 200
 
-    # 3. Submit daily scam sample
+    # 3. Submit daily scam sample (authenticated)
     sample_res = client.post(
         "/api/v1/protect/samples",
+        headers=auth_headers,
         json={
             "text": "Electricity cut aakum night 9 pm. Call officer at 9876543210",
             "language": "manglish",
@@ -80,8 +90,24 @@ def test_protect_api_endpoints(client: TestClient, auth_headers: dict[str, str])
         },
     )
     assert sample_res.status_code == 201
+    own_samples = client.get("/api/v1/protect/samples", headers=auth_headers)
+    assert len(own_samples.json()) == 1
+    assert "9876543210" not in own_samples.json()[0]["text"]
 
-    # 4. Verified contacts search
+    other_user = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "other_sample_user@example.com",
+            "password": "StrongPassword123!",
+            "full_name": "Other User",
+            "terms_accepted": True,
+            "ai_data_processing_consent": True,
+        },
+    )
+    other_headers = {"Authorization": f"Bearer {other_user.json()['access_token']}"}
+    assert client.get("/api/v1/protect/samples", headers=other_headers).json() == []
+
+    # 4. Verified contacts search (public lookup)
     vc_res = client.get("/api/v1/protect/verified-contacts?query=sbi")
     assert vc_res.status_code == 200
     assert len(vc_res.json()) >= 1
@@ -131,7 +157,60 @@ def test_protect_api_endpoints(client: TestClient, auth_headers: dict[str, str])
     assert patch_res.status_code == 200
     assert patch_res.json()["status"] == "in_progress"
 
-    # 7. Audit Trail API
+    invalid_status_res = client.patch(
+        f"/api/v1/protect/recovery-cases/{case_id}",
+        headers=auth_headers,
+        json={"status": "invalid"},
+    )
+    assert invalid_status_res.status_code == 400
+
+    # 7. Audit Trail API (scoped to user)
     audit_res = client.get("/api/v1/protect/audit-trail", headers=auth_headers)
     assert audit_res.status_code == 200
     assert len(audit_res.json()) > 0
+    # Every audit entry must belong to the user
+    user_id = case_res.json()["user_id"]
+    for entry in audit_res.json():
+        assert entry["user_id"] == user_id
+
+
+def test_unauthenticated_protect_endpoints(client: TestClient) -> None:
+    # Samples and check endpoints require authentication
+    assert client.post("/api/v1/protect/check", json={"message": "hello"}).status_code == 401
+    assert client.post("/api/v1/protect/samples", json={"text": "scam", "language": "en"}).status_code == 401
+    assert client.get("/api/v1/protect/audit-trail").status_code == 401
+
+
+def test_protect_consent_enforcement(client: TestClient) -> None:
+    # User with NO consent
+    reg_no_consent = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "noconsent@example.com",
+            "password": "StrongPassword123!",
+            "full_name": "No Consent",
+            "terms_accepted": False,
+            "ai_data_processing_consent": False,
+        },
+    )
+    token = reg_no_consent.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Blocked from AI check without AI consent (403)
+    res_check = client.post("/api/v1/protect/check", headers=headers, json={"message": "check"})
+    assert res_check.status_code == 403
+    assert "ai_data_processing" in res_check.json()["error"]["message"]
+
+    # Blocked from recovery cases without terms consent (403)
+    res_case = client.post(
+        "/api/v1/protect/recovery-cases",
+        headers=headers,
+        json={
+            "scam_type": "upi_fraud",
+            "amount_lost": 1000.0,
+            "platform": "SMS",
+            "incident_summary": "Summary",
+        },
+    )
+    assert res_case.status_code == 403
+    assert "terms" in res_case.json()["error"]["message"]
