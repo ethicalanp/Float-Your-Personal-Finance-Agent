@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -8,6 +10,20 @@ from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import AppException, format_error_response
 from app.core.middleware import RequestContextMiddleware, setup_json_logging
+
+
+def sanitize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Strip raw user inputs from validation error details to prevent echoing passwords/secrets."""
+    sanitized = []
+    for err in errors:
+        clean_err = dict(err)
+        clean_err.pop("input", None)
+        if "ctx" in clean_err and isinstance(clean_err["ctx"], dict):
+            clean_ctx = dict(clean_err["ctx"])
+            clean_ctx.pop("input", None)
+            clean_err["ctx"] = clean_ctx
+        sanitized.append(clean_err)
+    return sanitized
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -52,7 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content=format_error_response(
                 code="VALIDATION_ERROR",
                 message="Request payload validation failed",
-                details=list(exc.errors()),
+                details=sanitize_validation_errors(list(exc.errors())),
                 request_id=req_id,
             ),
         )
