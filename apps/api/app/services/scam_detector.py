@@ -45,7 +45,10 @@ INDICATORS: dict[str, dict[str, Any]] = {
             "otp share cheyyu", "otp ayakkuka", "pin parayuka", "kyc update cheyyu",
             "linkil click cheyyu", "pan link cheyyuka",
         ],
-        "explanation": "Demands for confidential credentials (OTP, PIN, KYC/PAN details). Legitimate institutions never ask for these via chat/SMS.",
+        "explanation": (
+            "Demands for confidential credentials (OTP, PIN, KYC/PAN details). "
+            "Legitimate institutions never ask for these via chat/SMS."
+        ),
     },
     "dangerous_actions": {
         "weight": 30,
@@ -60,7 +63,10 @@ INDICATORS: dict[str, dict[str, Any]] = {
         "manglish": [
             "apk install cheyyu", "app download cheyyuka", "anydesk install cheyyu", "panam transfer cheyyu",
         ],
-        "explanation": "Request to download unverified third-party APKs or screen-sharing tools that grant attackers full remote access.",
+        "explanation": (
+            "Request to download unverified third-party APKs or screen-sharing tools "
+            "that grant attackers full remote access."
+        ),
     },
     "lottery_reward": {
         "weight": 20,
@@ -157,7 +163,9 @@ def analyze_scam_message(message: str) -> dict[str, Any]:
             "category": "suspicious_links",
             "weight": link_weight,
             "matched_patterns": link_matches[:3],
-            "explanation": "Contains links or file attachments designed to route you to phishing sites or malicious APKs.",
+            "explanation": (
+                "Contains links or file attachments designed to route you to phishing sites or malicious APKs."
+            ),
         })
 
     # Clamp score to 100
