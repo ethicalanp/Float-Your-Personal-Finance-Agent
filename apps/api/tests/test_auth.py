@@ -20,14 +20,14 @@ def test_password_hashing() -> None:
 def test_jwt_token_creation_and_decoding() -> None:
     token = create_access_token(
         subject="user-123",
-        claims={"email": "test@example.com", "role": "user"},
-        expires_minutes=60,
+        expires_minutes=30,
     )
     payload = decode_access_token(token)
 
     assert payload["sub"] == "user-123"
-    assert payload["email"] == "test@example.com"
-    assert payload["role"] == "user"
+    assert "exp" in payload
+    assert "iat" in payload
+    assert "jti" in payload
 
 
 def test_user_registration_and_login(client: TestClient) -> None:
