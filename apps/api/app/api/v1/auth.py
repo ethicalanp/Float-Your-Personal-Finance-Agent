@@ -1,32 +1,30 @@
-import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.dependencies import get_current_active_user, get_db
 from app.core.errors import ConflictException, UnauthorizedException
 from app.core.security import (
-    CurrentUser,
     create_access_token,
-    get_current_user,
     hash_password,
     verify_password,
 )
+from app.models.enums import ConsentType
+from app.models.user import Consent, User
 
 router = APIRouter(prefix="/auth", tags=["Authentication & Consent"])
-
-# In-memory storage for testability & dev environments
-_USERS_DB: dict[str, dict[str, Any]] = {}
-_CONSENTS_DB: dict[str, dict[str, Any]] = {}
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     full_name: str
-    terms_accepted: bool = True
-    ai_data_processing_consent: bool = True
+    terms_accepted: bool = False
+    ai_data_processing_consent: bool = False
     consent_version: str = "v1.0"
 
 
@@ -58,114 +56,182 @@ class UserProfileResponse(BaseModel):
 
 
 @router.post("/register", response_model=AuthTokenResponse, status_code=201)
-async def register(req: RegisterRequest) -> AuthTokenResponse:
+async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)) -> AuthTokenResponse:
     """Register a new user, capture required privacy consent, and issue an access token."""
-    email_lower = req.email.lower()
-    if email_lower in _USERS_DB:
+    normalized_email = req.email.lower().strip()
+
+    # Check for existing user
+    stmt = select(User).where(User.normalized_email == normalized_email)
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none():
         raise ConflictException("A user with this email address already exists.")
 
-    user_id = str(uuid.uuid4())
-    pw_hash = hash_password(req.password)
-    now = datetime.now(UTC).isoformat()
-
-    _USERS_DB[email_lower] = {
-        "user_id": user_id,
-        "email": email_lower,
-        "full_name": req.full_name,
-        "password_hash": pw_hash,
-        "created_at": now,
-    }
-
-    _CONSENTS_DB[user_id] = {
-        "terms_accepted": req.terms_accepted,
-        "ai_data_processing_consent": req.ai_data_processing_consent,
-        "consent_version": req.consent_version,
-        "consented_at": now,
-    }
-
-    token = create_access_token(
-        subject=user_id,
-        claims={
-            "email": email_lower,
-            "full_name": req.full_name,
-            "consent_given": req.terms_accepted and req.ai_data_processing_consent,
-        },
+    user = User(
+        email=str(req.email),
+        normalized_email=normalized_email,
+        hashed_password=hash_password(req.password),
+        full_name=req.full_name,
+        is_active=True,
     )
+    db.add(user)
+    await db.flush()
+
+    # Add active consents if consented
+    now = datetime.now(UTC)
+    if req.terms_accepted:
+        terms_consent = Consent(
+            user_id=user.id,
+            consent_type=ConsentType.TERMS,
+            consent_version=req.consent_version,
+            granted_at=now,
+        )
+        db.add(terms_consent)
+
+    if req.ai_data_processing_consent:
+        ai_consent = Consent(
+            user_id=user.id,
+            consent_type=ConsentType.AI_DATA_PROCESSING,
+            consent_version=req.consent_version,
+            granted_at=now,
+        )
+        db.add(ai_consent)
+
+    await db.commit()
+    await db.refresh(user)
+
+    token = create_access_token(subject=str(user.id))
+    consent_given = bool(req.terms_accepted and req.ai_data_processing_consent)
 
     return AuthTokenResponse(
         access_token=token,
         token_type="bearer",
-        user_id=user_id,
-        email=email_lower,
-        full_name=req.full_name,
-        consent_given=req.terms_accepted and req.ai_data_processing_consent,
+        user_id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        consent_given=consent_given,
     )
 
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login(req: LoginRequest) -> AuthTokenResponse:
+async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)) -> AuthTokenResponse:
     """Authenticate with email and password, returning an access token."""
-    email_lower = req.email.lower()
-    user = _USERS_DB.get(email_lower)
-    if not user or not verify_password(req.password, user["password_hash"]):
+    normalized_email = req.email.lower().strip()
+
+    stmt = select(User).where(User.normalized_email == normalized_email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(req.password, user.hashed_password):
         raise UnauthorizedException("Invalid email or password.")
+    if not user.is_active:
+        raise UnauthorizedException("User account is inactive.")
 
-    user_id = user["user_id"]
-    consent = _CONSENTS_DB.get(user_id, {})
-    consent_given = consent.get("terms_accepted", False) and consent.get("ai_data_processing_consent", False)
-
-    token = create_access_token(
-        subject=user_id,
-        claims={
-            "email": email_lower,
-            "full_name": user["full_name"],
-            "consent_given": consent_given,
-        },
+    # Check active consent status
+    consent_stmt = select(Consent).where(
+        Consent.user_id == user.id,
+        Consent.revoked_at.is_(None),
     )
+    consent_result = await db.execute(consent_stmt)
+    active_consents = {c.consent_type for c in consent_result.scalars().all()}
+    consent_given = bool(
+        ConsentType.TERMS in active_consents and ConsentType.AI_DATA_PROCESSING in active_consents
+    )
+
+    token = create_access_token(subject=str(user.id))
 
     return AuthTokenResponse(
         access_token=token,
         token_type="bearer",
-        user_id=user_id,
-        email=email_lower,
-        full_name=user["full_name"],
+        user_id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
         consent_given=consent_given,
     )
 
 
 @router.get("/me", response_model=UserProfileResponse)
-async def get_my_profile(current_user: CurrentUser = Depends(get_current_user)) -> UserProfileResponse:
+async def get_my_profile(
+    user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserProfileResponse:
     """Retrieve currently authenticated user profile and consent settings."""
-    consent = _CONSENTS_DB.get(current_user.user_id, {
-        "terms_accepted": False,
-        "ai_data_processing_consent": False,
-        "consent_version": "v1.0",
-        "consented_at": datetime.now(UTC).isoformat(),
-    })
+    consent_stmt = select(Consent).where(
+        Consent.user_id == user.id,
+        Consent.revoked_at.is_(None),
+    )
+    consent_result = await db.execute(consent_stmt)
+    active_consents = {c.consent_type: c for c in consent_result.scalars().all()}
+
+    terms = active_consents.get(ConsentType.TERMS)
+    ai_proc = active_consents.get(ConsentType.AI_DATA_PROCESSING)
+
+    consent_dict = {
+        "terms_accepted": terms is not None,
+        "ai_data_processing_consent": ai_proc is not None,
+        "consent_version": terms.consent_version if terms else "v1.0",
+        "consented_at": terms.granted_at.isoformat() if terms else None,
+    }
 
     return UserProfileResponse(
-        user_id=current_user.user_id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        consent=consent,
+        user_id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        consent=consent_dict,
     )
 
 
 @router.post("/consent")
 async def update_consent(
     req: ConsentUpdateRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update user privacy and AI data processing consent."""
-    now = datetime.now(UTC).isoformat()
-    _CONSENTS_DB[current_user.user_id] = {
-        "terms_accepted": req.terms_accepted,
-        "ai_data_processing_consent": req.ai_data_processing_consent,
-        "consent_version": req.consent_version,
-        "consented_at": now,
-    }
+    now = datetime.now(UTC)
+
+    # Fetch existing active consents
+    consent_stmt = select(Consent).where(
+        Consent.user_id == user.id,
+        Consent.revoked_at.is_(None),
+    )
+    consent_result = await db.execute(consent_stmt)
+    active_map = {c.consent_type: c for c in consent_result.scalars().all()}
+
+    # Update TERMS
+    if req.terms_accepted and ConsentType.TERMS not in active_map:
+        db.add(
+            Consent(
+                user_id=user.id,
+                consent_type=ConsentType.TERMS,
+                consent_version=req.consent_version,
+                granted_at=now,
+            )
+        )
+    elif not req.terms_accepted and ConsentType.TERMS in active_map:
+        active_map[ConsentType.TERMS].revoked_at = now
+
+    # Update AI_DATA_PROCESSING
+    if req.ai_data_processing_consent and ConsentType.AI_DATA_PROCESSING not in active_map:
+        db.add(
+            Consent(
+                user_id=user.id,
+                consent_type=ConsentType.AI_DATA_PROCESSING,
+                consent_version=req.consent_version,
+                granted_at=now,
+            )
+        )
+    elif not req.ai_data_processing_consent and ConsentType.AI_DATA_PROCESSING in active_map:
+        active_map[ConsentType.AI_DATA_PROCESSING].revoked_at = now
+
+    await db.commit()
+
     return {
         "status": "updated",
-        "user_id": current_user.user_id,
-        "consent": _CONSENTS_DB[current_user.user_id],
+        "user_id": str(user.id),
+        "consent": {
+            "terms_accepted": req.terms_accepted,
+            "ai_data_processing_consent": req.ai_data_processing_consent,
+            "consent_version": req.consent_version,
+            "updated_at": now.isoformat(),
+        },
     }
