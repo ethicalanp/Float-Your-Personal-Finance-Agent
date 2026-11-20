@@ -1,11 +1,11 @@
-import base64
 import hashlib
 import hmac
-import json
 import secrets
-import time
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
+import jwt
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -25,7 +25,6 @@ def hash_password(password: str) -> str:
         salt,
         iterations=100_000,
     )
-    # Store format: algorithm$iterations$salt_hex$key_hex
     return f"pbkdf2:sha256:100000${salt.hex()}${key.hex()}"
 
 
@@ -48,108 +47,71 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             iterations=iterations,
         )
         return hmac.compare_digest(computed_key, expected_key)
-    except ValueError:
+    except Exception:
         return False
-
-
-def _b64url_encode(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
-
-
-def _b64url_decode(data: str) -> bytes:
-    padding = 4 - (len(data) % 4)
-    if padding and padding != 4:
-        data += "=" * padding
-    return base64.urlsafe_b64decode(data.encode("utf-8"))
 
 
 def create_access_token(
     subject: str,
-    claims: dict[str, Any] | None = None,
     expires_minutes: int | None = None,
 ) -> str:
-    """Create a standard HS256-signed JWT token."""
+    """Create a minimal HS256-signed JWT token via PyJWT.
+
+    Minimal claims principle: carries only subject identity (user_id), iat, exp, and jti.
+    Sensitive profile and consent details are queried fresh from the database.
+    """
     settings = get_settings()
     exp_minutes = expires_minutes or settings.jwt_access_token_expire_minutes
-    now = int(time.time())
-    exp = now + (exp_minutes * 60)
+    now = datetime.now(timezone.utc)
+    exp = int(now.timestamp()) + (exp_minutes * 60)
 
-    header = {"alg": "HS256", "typ": "JWT"}
     payload = {
-        "sub": subject,
-        "iat": now,
+        "sub": str(subject),
+        "iat": int(now.timestamp()),
         "exp": exp,
+        "jti": str(uuid.uuid4()),
     }
-    if claims:
-        payload.update(claims)
 
-    encoded_header = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
-    encoded_payload = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-
-    signing_input = f"{encoded_header}.{encoded_payload}".encode()
-    signature = hmac.new(
-        settings.jwt_secret_key.encode("utf-8"),
-        signing_input,
-        hashlib.sha256,
-    ).digest()
-    encoded_signature = _b64url_encode(signature)
-
-    return f"{encoded_header}.{encoded_payload}.{encoded_signature}"
+    return jwt.encode(
+        payload,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
-    """Decode and verify a standard HS256-signed JWT token."""
+    """Safely decode and verify JWT token using PyJWT. Never raises 500 on malformed input."""
     settings = get_settings()
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise UnauthorizedException("Invalid token format")
-
-    encoded_header, encoded_payload, encoded_signature = parts
-    signing_input = f"{encoded_header}.{encoded_payload}".encode()
-
-    expected_signature = hmac.new(
-        settings.jwt_secret_key.encode("utf-8"),
-        signing_input,
-        hashlib.sha256,
-    ).digest()
-
-    actual_signature = _b64url_decode(encoded_signature)
-    if not hmac.compare_digest(actual_signature, expected_signature):
-        raise UnauthorizedException("Token signature verification failed")
-
-    payload_bytes = _b64url_decode(encoded_payload)
-    payload = json.loads(payload_bytes.decode("utf-8"))
-
-    now = int(time.time())
-    if payload.get("exp") and now > payload["exp"]:
-        raise UnauthorizedException("Token has expired")
-
-    return payload
+    try:
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+            options={"require": ["sub", "exp", "iat"]},
+        )
+        return payload
+    except jwt.ExpiredSignatureError as err:
+        raise UnauthorizedException("Authentication token has expired") from err
+    except jwt.PyJWTError as err:
+        raise UnauthorizedException("Invalid authentication token") from err
+    except Exception as err:
+        raise UnauthorizedException("Could not validate authentication credentials") from err
 
 
 class CurrentUser(BaseModel):
     user_id: str
-    email: str
-    full_name: str
-    consent_given: bool = False
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> CurrentUser:
-    """Dependency to extract and validate the authenticated user from the Authorization header."""
-    if credentials is None:
+    """Dependency extracting and validating the authenticated user from the Bearer token."""
+    if not credentials:
         raise UnauthorizedException("Missing Authorization header")
 
     payload = decode_access_token(credentials.credentials)
-
     sub = payload.get("sub")
     if not sub:
-        raise UnauthorizedException("Invalid token payload")
+        raise UnauthorizedException("Invalid token subject")
 
-    return CurrentUser(
-        user_id=sub,
-        email=payload.get("email", ""),
-        full_name=payload.get("full_name", ""),
-        consent_given=payload.get("consent_given", False),
-    )
+    return CurrentUser(user_id=str(sub))
