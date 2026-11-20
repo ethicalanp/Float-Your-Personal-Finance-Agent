@@ -43,10 +43,10 @@ class BorrowAssessment(Base):
         enum_type(ReadinessBand, "readiness_band"), nullable=False
     )
     top_factors: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False
+        JSONB, default=list, server_default=text("'[]'"), nullable=False
     )
     recommendations: Mapped[list[Any]] = mapped_column(
-        JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False
+        JSONB, default=list, server_default=text("'[]'"), nullable=False
     )
     input_features: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
