@@ -21,6 +21,7 @@ from app.models.enums import (
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.user import User
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
+from app.services.recurring_service import match_transaction_to_occurrence
 from app.services.statement_parser import parse_csv_statement, parse_sms_statement
 
 router = APIRouter(prefix="/plan", tags=["Plan — Personal Finance Management"])
@@ -223,6 +224,9 @@ async def upload_statement(
             account.reported_balance += amt_decimal
         else:
             account.reported_balance -= amt_decimal
+
+        if t_type == TransactionType.DEBIT:
+            await match_transaction_to_occurrence(db, current_user.id, new_tx)
 
         tx_record = {
             "id": str(new_tx.id),
