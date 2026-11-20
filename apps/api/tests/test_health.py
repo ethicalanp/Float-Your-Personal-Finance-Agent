@@ -21,7 +21,12 @@ def test_api_docs_are_available_outside_production(client: TestClient) -> None:
 
 
 def test_api_docs_are_hidden_in_production() -> None:
-    production = Settings(app_env="production", _env_file=None)
+    production = Settings(
+        app_env="production",
+        jwt_secret_key="a" * 32,
+        database_url="postgresql+psycopg://user:pass@localhost:5432/prod_db",
+        _env_file=None,
+    )
     prod_client = TestClient(create_app(production))
 
     assert prod_client.get("/docs").status_code == 404
