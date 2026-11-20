@@ -118,7 +118,10 @@ def decode_access_token(token: str) -> dict[str, Any]:
         raise UnauthorizedException("Token signature verification failed")
 
     payload_bytes = _b64url_decode(encoded_payload)
-    payload = json.loads(payload_bytes.decode("utf-8"))
+    decoded_payload: object = json.loads(payload_bytes.decode("utf-8"))
+    if not isinstance(decoded_payload, dict):
+        raise UnauthorizedException("Invalid token payload")
+    payload: dict[str, Any] = decoded_payload
 
     now = int(time.time())
     if payload.get("exp") and now > payload["exp"]:

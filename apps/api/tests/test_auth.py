@@ -1,5 +1,9 @@
+from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.core.errors import UnauthorizedException
 from app.core.security import (
     create_access_token,
     decode_access_token,
@@ -28,6 +32,14 @@ def test_jwt_token_creation_and_decoding() -> None:
     assert payload["sub"] == "user-123"
     assert payload["email"] == "test@example.com"
     assert payload["role"] == "user"
+
+
+def test_jwt_rejects_non_object_payload() -> None:
+    token = create_access_token(subject="user-123")
+
+    with patch("app.core.security.json.loads", return_value=[]):
+        with pytest.raises(UnauthorizedException, match="Invalid token payload"):
+            decode_access_token(token)
 
 
 def test_user_registration_and_login(client: TestClient) -> None:
