@@ -10,7 +10,32 @@ ENV_EXAMPLE = Path(__file__).resolve().parents[1] / ".env.example"
 
 def test_production_refuses_debug_mode() -> None:
     with pytest.raises(ValidationError):
-        Settings(app_env="production", debug=True, _env_file=None)
+        Settings(
+            app_env="production",
+            debug=True,
+            database_url="postgresql+psycopg://user:pass@localhost/prod",
+            jwt_secret_key="a" * 32,
+            _env_file=None,
+        )
+
+
+def test_production_refuses_default_jwt_secret() -> None:
+    with pytest.raises(ValidationError, match="PFA_JWT_SECRET_KEY"):
+        Settings(
+            app_env="production",
+            database_url="postgresql+psycopg://user:pass@localhost/prod",
+            _env_file=None,
+        )
+
+
+def test_production_requires_database_url() -> None:
+    with pytest.raises(ValidationError, match="PFA_DATABASE_URL"):
+        Settings(
+            app_env="production",
+            jwt_secret_key="a" * 32,
+            database_url=None,
+            _env_file=None,
+        )
 
 
 def test_unknown_environment_name_is_rejected() -> None:
