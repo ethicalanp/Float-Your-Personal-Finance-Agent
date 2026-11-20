@@ -166,7 +166,8 @@ def parse_sms_statement(sms_text: str, account_id: str) -> dict[str, Any] | None
         t_type = "credit"
 
     # Detect merchant / entity
-    merchant_match = re.search(r'(?:at|to|info\/|by)\s+([A-Za-z0-9\s.\-_]+?)(?:\s+on|\s+ref|\.|\s+avail|\s+bal)', text, re.IGNORECASE)
+    merchant_pattern = r'(?:at|to|info\/|by)\s+([A-Za-z0-9\s.\-_]+?)(?:\s+on|\s+ref|\.|\s+avail|\s+bal)'
+    merchant_match = re.search(merchant_pattern, text, re.IGNORECASE)
     merchant_raw = merchant_match.group(1).strip() if merchant_match else ""
 
     category, merchant = categorize_transaction(merchant_raw or text, t_type)
