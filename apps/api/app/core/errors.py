@@ -48,6 +48,11 @@ class UnprocessableException(AppException):
         super().__init__(message=message, code="UNPROCESSABLE_ENTITY", status_code=422, details=details)
 
 
+class ServiceUnavailableException(AppException):
+    def __init__(self, message: str = "Service unavailable", details: list[dict[str, Any]] | None = None) -> None:
+        super().__init__(message=message, code="SERVICE_UNAVAILABLE", status_code=503, details=details)
+
+
 def format_error_response(
     code: str,
     message: str,

@@ -21,7 +21,6 @@ from app.models.enums import (
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.user import User
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
-from app.services.recurring_service import match_transaction_to_occurrence
 from app.services.statement_parser import parse_csv_statement, parse_sms_statement
 
 router = APIRouter(prefix="/plan", tags=["Plan — Personal Finance Management"])
@@ -218,9 +217,6 @@ async def upload_statement(
         )
         db.add(new_tx)
         await db.flush()
-
-        # Match incoming debit against upcoming recurring occurrences
-        await match_transaction_to_occurrence(db=db, user_id=current_user.id, transaction=new_tx)
 
         # Update balance
         if t_type == TransactionType.CREDIT:

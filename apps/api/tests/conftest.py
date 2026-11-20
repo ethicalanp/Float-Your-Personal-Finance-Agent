@@ -19,11 +19,6 @@ from app.models.protect import (
     ScamSample,
     VerifiedContact,
 )
-from app.models.recurring import (
-    RecurringCommitment,
-    RecurringNotification,
-    RecurringOccurrence,
-)
 from app.models.user import Consent, User
 
 APP_TABLES = [
@@ -37,9 +32,6 @@ APP_TABLES = [
     VerifiedContact.__table__,
     ScamSample.__table__,
     AuditTrail.__table__,
-    RecurringCommitment.__table__,
-    RecurringOccurrence.__table__,
-    RecurringNotification.__table__,
     BorrowAssessment.__table__,
 ]
 

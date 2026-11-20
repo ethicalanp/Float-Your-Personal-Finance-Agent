@@ -29,7 +29,19 @@ def draft_fraud_complaint(
     masked_desc = mask_sensitive_data(description)
 
     # Formal Bank Email Draft
-    bank_email_subject = f"URGENT: Dispute of Unauthorized Fraud Transaction - A/C {account_number_mask} - Ref: {transaction_reference}"
+    bank_email_subject = (
+        f"URGENT: Dispute of Unauthorized Fraud Transaction - A/C {account_number_mask} "
+        f"- Ref: {transaction_reference}"
+    )
+    rbi_notice = (
+        "In accordance with Reserve Bank of India (RBI) Circular RBI/2017-18/15 "
+        "(Limiting Liability of Customers in Unauthorized Electronic Banking Transactions), "
+        "I am reporting this incident within the immediate reporting window."
+    )
+    cybercrime_notice = (
+        "Note: Calling National Cybercrime Helpline 1930 immediately with this UTR reference enables the police "
+        "cybercell to halt fund transfers across intermediary bank nodes."
+    )
     bank_email_body = f"""To,
 The Nodal Grievance Officer / Fraud Monitoring Cell,
 {bank_contact['institution']}
@@ -50,7 +62,7 @@ Fraud Nature: {scam_type}
 Incident Summary:
 {masked_desc or "An unauthorized transaction occurred without my consent or authorization."}
 
-In accordance with Reserve Bank of India (RBI) Circular RBI/2017-18/15 (Limiting Liability of Customers in Unauthorized Electronic Banking Transactions), I am reporting this incident within the immediate reporting window.
+{rbi_notice}
 
 Requested Actions:
 1. Immediately place a lien/freeze on the recipient account/beneficiary wallet to recover the funds.
@@ -76,7 +88,7 @@ Date: {date_formatted}
 8. Brief Chronology:
 {masked_desc}
 
-Note: Calling National Cybercrime Helpline 1930 immediately with this UTR reference enables the police cybercell to halt fund transfers across intermediary bank nodes.
+{cybercrime_notice}
 """
 
     return {
@@ -88,11 +100,23 @@ Note: Calling National Cybercrime Helpline 1930 immediately with this UTR refere
             "body": bank_email_body,
         },
         "cyber_cell_draft": cyber_cell_template,
-        "safety_disclaimer": "This draft is provided for your review and submission. Float will never submit legal complaints or freeze accounts autonomously.",
+        "safety_disclaimer": (
+            "This draft is provided for your review and submission. "
+            "Float will never submit legal complaints or freeze accounts autonomously."
+        ),
         "recommended_first_hour_checklist": [
-            f"Call {bank_contact['institution']} helpline at {bank_contact['toll_free_number']} to lock cards and netbanking.",
-            "Dial National Cyber Crime Helpline 1930 immediately to register the UTR number in the national fraud tracking portal.",
-            "Send the above drafted notice to your bank's official grievance email to establish your timestamp under RBI zero liability rules.",
+            (
+                f"Call {bank_contact['institution']} helpline at "
+                f"{bank_contact['toll_free_number']} to lock cards and netbanking."
+            ),
+            (
+                "Dial National Cyber Crime Helpline 1930 immediately to register the UTR number "
+                "in the national fraud tracking portal."
+            ),
+            (
+                "Send the above drafted notice to your bank's official grievance email to establish your timestamp "
+                "under RBI zero liability rules."
+            ),
             "Change passwords and MPINs on all banking applications.",
         ],
     }
