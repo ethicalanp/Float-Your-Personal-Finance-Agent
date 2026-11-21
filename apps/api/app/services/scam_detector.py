@@ -33,7 +33,7 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "credential_harvesting": {
         "weight": 35,
         "en": [
-            "share otp", "send otp", "enter pin", "share pin", "enter password",
+            "share otp", "share your otp", "send otp", "enter pin", "share pin", "enter password",
             "verify kyc", "update kyc", "complete kyc", "update pan", "verify pan",
             "aadhaar link", "click here to verify", "update your details",
         ],
