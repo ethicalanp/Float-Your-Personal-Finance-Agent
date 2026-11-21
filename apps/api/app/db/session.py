@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Any
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -12,6 +13,14 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import get_settings
+
+
+def to_sync_database_url(database_url: str) -> str:
+    """Convert supported async database URLs to their synchronous drivers."""
+    url = make_url(database_url)
+    if url.drivername == "sqlite+aiosqlite":
+        url = url.set(drivername="sqlite")
+    return url.render_as_string(hide_password=False)
 
 
 class Base(DeclarativeBase):
@@ -50,7 +59,7 @@ def get_sync_engine() -> Any:
         raise RuntimeError("PFA_DATABASE_URL is not configured.")
 
     return create_engine(
-        settings.database_url,
+        to_sync_database_url(settings.database_url),
         pool_pre_ping=True,
     )
 
