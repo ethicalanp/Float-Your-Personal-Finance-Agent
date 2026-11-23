@@ -20,12 +20,20 @@ env/
 
 # Testing and coverage
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 coverage.xml
 apps/api/artifacts/
 /artifacts/
-/data/raw/
+data/
+apps/api/data/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log
@@ -54,6 +62,11 @@ ios/Pods/
 
 # Jupyter
 .ipynb_checkpoints/
+notebooks/
+
+# Local documents and instructions
+db_design2.dbml
+AGENTS.md
 
 # Temporary files
 *.tmp
