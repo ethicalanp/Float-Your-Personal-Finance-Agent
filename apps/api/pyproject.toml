@@ -18,6 +18,7 @@ dependencies = [
     "pyjwt>=2.9.0",
     "lightgbm>=4.5.0",
     "scikit-learn>=1.6.0",
+    "pandas>=2.2.0",
     "shap>=0.46.0",
     "aiosqlite>=0.20.0",
 ]
@@ -29,6 +30,9 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.6.0",
+]
+training = [
+    "mlflow>=2.18.0",
 ]
 
 [tool.pytest.ini_options]
@@ -61,7 +65,17 @@ disallow_untyped_defs = false
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["shap", "sklearn.*"]
+module = [
+    "joblib",
+    "shap",
+    "sklearn.*",
+    "pandas",
+    "pandas.*",
+    "mlflow",
+    "mlflow.*",
+    "torch",
+    "transformers",
+]
 ignore_missing_imports = true
 
 [tool.setuptools.packages.find]
