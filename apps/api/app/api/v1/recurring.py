@@ -31,15 +31,11 @@ router = APIRouter(prefix="/recurring", tags=["Recurring Payments & Commitments"
 class DeclareCommitmentRequest(BaseModel):
     name: str = Field(..., json_schema_extra={"example": "House Rent"})
     category: str = Field("Rent & Housing", json_schema_extra={"example": "Rent & Housing"})
-    amount_type: Literal["fixed", "variable_band"] = Field(
-        "fixed", json_schema_extra={"example": "fixed"}
-    )
+    amount_type: Literal["fixed", "variable_band"] = Field("fixed", json_schema_extra={"example": "fixed"})
     expected_amount: float = Field(..., gt=0, json_schema_extra={"example": 15000.0})
     min_amount: float | None = Field(None, json_schema_extra={"example": 14000.0})
     max_amount: float | None = Field(None, json_schema_extra={"example": 16000.0})
-    frequency: Literal["monthly", "quarterly", "yearly"] = Field(
-        "monthly", json_schema_extra={"example": "monthly"}
-    )
+    frequency: Literal["monthly", "quarterly", "yearly"] = Field("monthly", json_schema_extra={"example": "monthly"})
     due_rule_day: int = Field(..., ge=1, le=31, json_schema_extra={"example": 5})
     merchant: str | None = Field(None, json_schema_extra={"example": "Landlord"})
 
@@ -211,11 +207,7 @@ async def delete_commitment(
     for occ in canceled_occurrences:
         occ.status = "cancelled"
     if canceled_ids:
-        await db.execute(
-            delete(RecurringNotification).where(
-                RecurringNotification.occurrence_id.in_(canceled_ids)
-            )
-        )
+        await db.execute(delete(RecurringNotification).where(RecurringNotification.occurrence_id.in_(canceled_ids)))
     await db.commit()
 
 
@@ -337,9 +329,7 @@ async def get_recurring_suggestions(
 ) -> list[dict[str, Any]]:
     """Scan past transaction history to suggest candidate recurring payments with regular intervals."""
     stmt = (
-        select(Transaction)
-        .where(Transaction.user_id == current_user.id)
-        .order_by(Transaction.transaction_date.asc())
+        select(Transaction).where(Transaction.user_id == current_user.id).order_by(Transaction.transaction_date.asc())
     )
     result = await db.execute(stmt)
     txs = result.scalars().all()

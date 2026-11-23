@@ -67,9 +67,7 @@ def _parse_account_type(type_str: str) -> AccountType:
         return AccountType(type_str.lower().strip())
     except ValueError as err:
         valid_types = [e.value for e in AccountType]
-        raise BadRequestException(
-            f"Invalid account_type '{type_str}'. Allowed values are: {valid_types}"
-        ) from err
+        raise BadRequestException(f"Invalid account_type '{type_str}'. Allowed values are: {valid_types}") from err
 
 
 @router.post("/accounts", response_model=AccountResponse, status_code=201)
@@ -267,9 +265,7 @@ async def list_transactions(
 ) -> list[dict[str, Any]]:
     """List transactions with optional filtering by account and category."""
     query = (
-        select(Transaction)
-        .where(Transaction.user_id == current_user.id)
-        .order_by(Transaction.transaction_date.desc())
+        select(Transaction).where(Transaction.user_id == current_user.id).order_by(Transaction.transaction_date.desc())
     )
 
     if account_id:

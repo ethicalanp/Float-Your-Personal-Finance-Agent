@@ -44,7 +44,9 @@ def test_scam_detector_multilingual() -> None:
     assert any(ind["category"] == "credential_harvesting" for ind in otp_request["detected_indicators"])
 
     # 2. Malayalam Scam
-    ml_scam = "അടിയന്തിരമായി കെവൈസി അപ്ഡേറ്റ് ചെയ്യുക. അല്ലെങ്കിൽ ഇന്നു രാത്രി വൈദ്യുതി വിച്ഛേദിക്കും. ലിങ്കിൽ ക്ലിക്ക് ചെയ്യുക: http://bit.ly/eb"
+    ml_scam = (
+        "അടിയന്തിരമായി കെവൈസി അപ്ഡേറ്റ് ചെയ്യുക. അല്ലെങ്കിൽ ഇന്നു രാത്രി വൈദ്യുതി വിച്ഛേദിക്കും. ലിങ്കിൽ ക്ലിക്ക് ചെയ്യുക: http://bit.ly/eb"
+    )
     res_ml = analyze_scam_message(ml_scam)
     assert res_ml["is_scam"] is True
     assert res_ml["language"] == "ml"

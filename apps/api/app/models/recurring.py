@@ -23,9 +23,7 @@ from app.db.session import Base
 
 class RecurringCommitment(Base):
     __tablename__ = "recurring_commitments"
-    __table_args__ = (
-        Index("idx_recurring_commitments_user", "user_id", "is_active"),
-    )
+    __table_args__ = (Index("idx_recurring_commitments_user", "user_id", "is_active"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()")

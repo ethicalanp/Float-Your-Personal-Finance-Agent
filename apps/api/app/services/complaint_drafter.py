@@ -17,12 +17,16 @@ def draft_fraud_complaint(
 ) -> dict[str, Any]:
     """Draft a formal, structured grievance notice for the user to submit to their bank & cybercell."""
     contacts = search_verified_contacts(bank_name)
-    bank_contact = contacts[0] if contacts else {
-        "institution": bank_name,
-        "toll_free_number": "Contact official branch",
-        "fraud_reporting_email": "Official bank nodal email",
-        "website": "Bank portal",
-    }
+    bank_contact = (
+        contacts[0]
+        if contacts
+        else {
+            "institution": bank_name,
+            "toll_free_number": "Contact official branch",
+            "fraud_reporting_email": "Official bank nodal email",
+            "website": "Bank portal",
+        }
+    )
 
     cyber_portal = search_verified_contacts("National Cyber Crime")[0]
     date_formatted = incident_date or datetime.now(UTC).strftime("%d-%B-%Y")
@@ -30,8 +34,7 @@ def draft_fraud_complaint(
 
     # Formal Bank Email Draft
     bank_email_subject = (
-        f"URGENT: Dispute of Unauthorized Fraud Transaction - A/C {account_number_mask} "
-        f"- Ref: {transaction_reference}"
+        f"URGENT: Dispute of Unauthorized Fraud Transaction - A/C {account_number_mask} - Ref: {transaction_reference}"
     )
     rbi_notice = (
         "In accordance with Reserve Bank of India (RBI) Circular RBI/2017-18/15 "
@@ -44,7 +47,7 @@ def draft_fraud_complaint(
     )
     bank_email_body = f"""To,
 The Nodal Grievance Officer / Fraud Monitoring Cell,
-{bank_contact['institution']}
+{bank_contact["institution"]}
 
 Subject: Formal Notice of Unauthorized Transaction under RBI Zero Liability Guidelines (Ref: {transaction_reference})
 
@@ -79,7 +82,7 @@ Date: {date_formatted}
     cyber_cell_template = f"""INCIDENT REPORT FOR CYBERCRIME PORTAL (https://cybercrime.gov.in / Helpline: 1930)
 
 1. Complainant Name: {victim_name}
-2. Bank / Institution: {bank_contact['institution']}
+2. Bank / Institution: {bank_contact["institution"]}
 3. Compromised Account: {account_number_mask}
 4. Disputed Transaction Ref / UTR: {transaction_reference}
 5. Amount Debited: INR {transaction_amount:,.2f}

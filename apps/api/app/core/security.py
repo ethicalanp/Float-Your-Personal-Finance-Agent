@@ -134,6 +134,7 @@ class CurrentUser(BaseModel):
     user_id: str
     email: str
     full_name: str
+    role: str = "user"
     consent_given: bool = False
 
 
@@ -154,5 +155,6 @@ async def get_current_user(
         user_id=sub,
         email=payload.get("email", ""),
         full_name=payload.get("full_name", ""),
+        role=payload.get("role", "user"),
         consent_given=payload.get("consent_given", False),
     )

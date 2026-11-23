@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_DEV_JWT_SECRET = "dev-insecure-secret-key-change-in-production-min32bytes"
@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = INSECURE_DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30  # 15 to 30 minutes for security
+    internal_metrics_token: SecretStr | None = None
     borrow_model_path: str | None = None
     enable_synthetic_ml_demos: bool = False
     synthetic_borrow_demo_model_path: str | None = None

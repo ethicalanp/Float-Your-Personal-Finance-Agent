@@ -1,6 +1,13 @@
+import sys
 from collections.abc import AsyncGenerator
 from functools import lru_cache
 from typing import Any
+
+if sys.platform == "win32":
+    import asyncio
+
+    if not isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
@@ -25,6 +32,7 @@ def to_sync_database_url(database_url: str) -> str:
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
+
     pass
 
 

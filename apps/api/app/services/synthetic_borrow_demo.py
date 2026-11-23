@@ -47,9 +47,7 @@ def _load_model(model_dir: str) -> tuple[Any, dict[str, Any]]:
     try:
         import lightgbm as lgb
     except (ImportError, OSError) as exc:
-        raise ServiceUnavailableException(
-            "The LightGBM runtime is unavailable for the synthetic Borrow demo."
-        ) from exc
+        raise ServiceUnavailableException("The LightGBM runtime is unavailable for the synthetic Borrow demo.") from exc
 
     model = lgb.Booster(model_file=str(model_path))
     if model.num_feature() != len(FEATURE_COLUMNS):

@@ -2,12 +2,31 @@ import re
 from typing import Any
 
 # Malayalam Unicode range: \u0D00-\u0D7F
-MALAYALAM_UNICODE_PATTERN = re.compile(r'[\u0D00-\u0D7F]')
+MALAYALAM_UNICODE_PATTERN = re.compile(r"[\u0D00-\u0D7F]")
 
 MANGLISH_MARKERS = [
-    "cheyyuka", "cheyyu", "cheyyanam", "kittum", "kittiyirikkunnu", "adakkuka",
-    "adakkillel", "aayi", "aano", "panam", "linkil", "vannu", "ivide", "entha",
-    "koodi", "aakanam", "njangal", "ningal", "nalkuka", "ayakkuka", "poya", "undakum",
+    "cheyyuka",
+    "cheyyu",
+    "cheyyanam",
+    "kittum",
+    "kittiyirikkunnu",
+    "adakkuka",
+    "adakkillel",
+    "aayi",
+    "aano",
+    "panam",
+    "linkil",
+    "vannu",
+    "ivide",
+    "entha",
+    "koodi",
+    "aakanam",
+    "njangal",
+    "ningal",
+    "nalkuka",
+    "ayakkuka",
+    "poya",
+    "undakum",
 ]
 
 # Indicator categories with weighted score
@@ -15,35 +34,78 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "urgency": {
         "weight": 25,
         "en": [
-            "immediately", "urgent", "urgently", "within 24 hours", "within 2 hours",
-            "account blocked", "account will be blocked", "electricity disconnected tonight",
-            "power cut tonight", "last warning", "final notice", "suspended", "deactivated",
-            "action required now", "legal action", "arrest warrant",
+            "immediately",
+            "urgent",
+            "urgently",
+            "within 24 hours",
+            "within 2 hours",
+            "account blocked",
+            "account will be blocked",
+            "electricity disconnected tonight",
+            "power cut tonight",
+            "last warning",
+            "final notice",
+            "suspended",
+            "deactivated",
+            "action required now",
+            "legal action",
+            "arrest warrant",
         ],
         "ml": [
-            "ഉടൻ തന്നെ", "അടിയന്തിരമായി", "അക്കൗണ്ട് ബ്ലോക്ക് ചെയ്യപ്പെടും", "ഇന്നു രാത്രി വൈദ്യുതി വിച്ഛേദിക്കും",
-            "അവസാന മുന്നറിയിപ്പ്", "സസ്പെൻഡ് ചെയ്യും", "നിയമനടപടി",
+            "ഉടൻ തന്നെ",
+            "അടിയന്തിരമായി",
+            "അക്കൗണ്ട് ബ്ലോക്ക് ചെയ്യപ്പെടും",
+            "ഇന്നു രാത്രി വൈദ്യുതി വിച്ഛേദിക്കും",
+            "അവസാന മുന്നറിയിപ്പ്",
+            "സസ്പെൻഡ് ചെയ്യും",
+            "നിയമനടപടി",
         ],
         "manglish": [
-            "urgent aayi", "udan thanne", "account block aayi", "block aakum", "cut aakum",
-            "electricity cut aakum", "last warning", "case aakum", "police pidikkum",
+            "urgent aayi",
+            "udan thanne",
+            "account block aayi",
+            "block aakum",
+            "cut aakum",
+            "electricity cut aakum",
+            "last warning",
+            "case aakum",
+            "police pidikkum",
         ],
         "explanation": "High urgency language pressurizing immediate action without giving time to verify.",
     },
     "credential_harvesting": {
         "weight": 35,
         "en": [
-            "share otp", "share your otp", "send otp", "enter pin", "share pin", "enter password",
-            "verify kyc", "update kyc", "complete kyc", "update pan", "verify pan",
-            "aadhaar link", "click here to verify", "update your details",
+            "share otp",
+            "share your otp",
+            "send otp",
+            "enter pin",
+            "share pin",
+            "enter password",
+            "verify kyc",
+            "update kyc",
+            "complete kyc",
+            "update pan",
+            "verify pan",
+            "aadhaar link",
+            "click here to verify",
+            "update your details",
         ],
         "ml": [
-            "ഒടിപി അയക്കുക", "പിൻ നൽകുക", "കെവൈസി അപ്ഡേറ്റ്", "പാൻ കാർഡ് ലിങ്ക് ചെയ്യുക",
-            "ലിങ്കിൽ ക്ലിക്ക് ചെയ്യുക", "വിവരങ്ങൾ നൽകുക",
+            "ഒടിപി അയക്കുക",
+            "പിൻ നൽകുക",
+            "കെവൈസി അപ്ഡേറ്റ്",
+            "പാൻ കാർഡ് ലിങ്ക് ചെയ്യുക",
+            "ലിങ്കിൽ ക്ലിക്ക് ചെയ്യുക",
+            "വിവരങ്ങൾ നൽകുക",
         ],
         "manglish": [
-            "otp share cheyyu", "otp ayakkuka", "pin parayuka", "kyc update cheyyu",
-            "linkil click cheyyu", "pan link cheyyuka",
+            "otp share cheyyu",
+            "otp ayakkuka",
+            "pin parayuka",
+            "kyc update cheyyu",
+            "linkil click cheyyu",
+            "pan link cheyyuka",
         ],
         "explanation": (
             "Demands for confidential credentials (OTP, PIN, KYC/PAN details). "
@@ -53,15 +115,26 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "dangerous_actions": {
         "weight": 30,
         "en": [
-            "install apk", "download apk", "download app", "install anydesk",
-            "install quicksupport", "install teamviewer", "install rustdesk",
-            "transfer to secure account", "pay penalty fee",
+            "install apk",
+            "download apk",
+            "download app",
+            "install anydesk",
+            "install quicksupport",
+            "install teamviewer",
+            "install rustdesk",
+            "transfer to secure account",
+            "pay penalty fee",
         ],
         "ml": [
-            "എപികെ ഇൻസ്റ്റാൾ ചെയ്യുക", "ആപ്പ് ഡൗൺലോഡ് ചെയ്യുക", "സുരക്ഷിത അക്കൗണ്ടിലേക്ക് മാറ്റുക",
+            "എപികെ ഇൻസ്റ്റാൾ ചെയ്യുക",
+            "ആപ്പ് ഡൗൺലോഡ് ചെയ്യുക",
+            "സുരക്ഷിത അക്കൗണ്ടിലേക്ക് മാറ്റുക",
         ],
         "manglish": [
-            "apk install cheyyu", "app download cheyyuka", "anydesk install cheyyu", "panam transfer cheyyu",
+            "apk install cheyyu",
+            "app download cheyyuka",
+            "anydesk install cheyyu",
+            "panam transfer cheyyu",
         ],
         "explanation": (
             "Request to download unverified third-party APKs or screen-sharing tools "
@@ -71,35 +144,64 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "lottery_reward": {
         "weight": 20,
         "en": [
-            "you have won", "lottery winner", "congratulations you won", "cash prize",
-            "claim reward", "claim cashback", "free gift", "kbc lottery",
+            "you have won",
+            "lottery winner",
+            "congratulations you won",
+            "cash prize",
+            "claim reward",
+            "claim cashback",
+            "free gift",
+            "kbc lottery",
         ],
         "ml": [
-            "സമ്മാനം ലഭിച്ചു", "ലോട്ടറി അടിച്ചു", "ക്യാഷ്ബാക്ക് ക്ലെയിം ചെയ്യുക", "സൗജന്യ സമ്മാനം",
+            "സമ്മാനം ലഭിച്ചു",
+            "ലോട്ടറി അടിച്ചു",
+            "ക്യാഷ്ബാക്ക് ക്ലെയിം ചെയ്യുക",
+            "സൗജന്യ സമ്മാനം",
         ],
         "manglish": [
-            "lottery adichu", "prize kittiyirikkunnu", "cashback claim cheyyu", "gift kittum",
+            "lottery adichu",
+            "prize kittiyirikkunnu",
+            "cashback claim cheyyu",
+            "gift kittum",
         ],
         "explanation": "Unsolicited reward/lottery claim bait, commonly used in advance-fee fraud.",
     },
     "impersonation": {
         "weight": 15,
         "en": [
-            "sbi alert", "hdfc bank alert", "icici bank", "axis bank", "trai",
-            "telecom department", "cbi", "mumbai police", "cyber cell", "fedex parcel",
-            "customs clearance", "eb bill department",
+            "sbi alert",
+            "hdfc bank alert",
+            "icici bank",
+            "axis bank",
+            "trai",
+            "telecom department",
+            "cbi",
+            "mumbai police",
+            "cyber cell",
+            "fedex parcel",
+            "customs clearance",
+            "eb bill department",
         ],
         "ml": [
-            "എസ്ബിഐ", "ബാങ്ക് അറിയിപ്പ്", "പോലീസ് അറിയിപ്പ്", "വൈദ്യുതി ബോർഡ്", "പാഴ്സൽ കസ്റ്റംസ്",
+            "എസ്ബിഐ",
+            "ബാങ്ക് അറിയിപ്പ്",
+            "പോലീസ് അറിയിപ്പ്",
+            "വൈദ്യുതി ബോർഡ്",
+            "പാഴ്സൽ കസ്റ്റംസ്",
         ],
         "manglish": [
-            "sbi alert", "bankil ninnu", "police alert", "eb department", "fedex parcel",
+            "sbi alert",
+            "bankil ninnu",
+            "police alert",
+            "eb department",
+            "fedex parcel",
         ],
         "explanation": "Mentions official agencies or banks in unverified text to induce false authority.",
     },
 }
 
-URL_REGEX = re.compile(r'https?://[^\s]+|bit\.ly/[^\s]+|tinyurl\.com/[^\s]+|t\.me/[^\s]+|wa\.me/[^\s]+|\.apk\b')
+URL_REGEX = re.compile(r"https?://[^\s]+|bit\.ly/[^\s]+|tinyurl\.com/[^\s]+|t\.me/[^\s]+|wa\.me/[^\s]+|\.apk\b")
 
 
 def detect_language(text: str) -> str:
@@ -147,26 +249,30 @@ def analyze_scam_message(message: str) -> dict[str, Any]:
         if found_keywords:
             weight = rule["weight"]
             total_score += weight
-            detected_indicators.append({
-                "category": key,
-                "weight": weight,
-                "matched_patterns": found_keywords[:3],
-                "explanation": rule["explanation"],
-            })
+            detected_indicators.append(
+                {
+                    "category": key,
+                    "weight": weight,
+                    "matched_patterns": found_keywords[:3],
+                    "explanation": rule["explanation"],
+                }
+            )
 
     # 2. Check for suspicious links / shorteners / APK attachments
     link_matches = URL_REGEX.findall(message)
     if link_matches:
         link_weight = 25
         total_score += link_weight
-        detected_indicators.append({
-            "category": "suspicious_links",
-            "weight": link_weight,
-            "matched_patterns": link_matches[:3],
-            "explanation": (
-                "Contains links or file attachments designed to route you to phishing sites or malicious APKs."
-            ),
-        })
+        detected_indicators.append(
+            {
+                "category": "suspicious_links",
+                "weight": link_weight,
+                "matched_patterns": link_matches[:3],
+                "explanation": (
+                    "Contains links or file attachments designed to route you to phishing sites or malicious APKs."
+                ),
+            }
+        )
 
     # Clamp score to 100
     risk_score = min(total_score, 100)

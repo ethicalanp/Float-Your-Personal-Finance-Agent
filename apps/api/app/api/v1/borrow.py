@@ -149,12 +149,8 @@ async def get_latest_assessment(
         default_probability=float(assessment.default_probability),
         readiness_band=assessment.readiness_band.value,
         top_factors=[FactorItem(**f) for f in assessment.top_factors],
-        positive_factors=[
-            FactorItem(**f) for f in assessment.top_factors if f["direction"] == "positive"
-        ],
-        negative_factors=[
-            FactorItem(**f) for f in assessment.top_factors if f["direction"] == "negative"
-        ],
+        positive_factors=[FactorItem(**f) for f in assessment.top_factors if f["direction"] == "positive"],
+        negative_factors=[FactorItem(**f) for f in assessment.top_factors if f["direction"] == "negative"],
         recommendations=[RecommendationItem(**r) for r in assessment.recommendations],
         input_features=assessment.input_features,
         legal_disclaimer=LEGAL_DISCLAIMER,
@@ -185,12 +181,8 @@ async def get_assessment_history(
             default_probability=float(a.default_probability),
             readiness_band=a.readiness_band.value,
             top_factors=[FactorItem(**f) for f in a.top_factors],
-            positive_factors=[
-                FactorItem(**f) for f in a.top_factors if f["direction"] == "positive"
-            ],
-            negative_factors=[
-                FactorItem(**f) for f in a.top_factors if f["direction"] == "negative"
-            ],
+            positive_factors=[FactorItem(**f) for f in a.top_factors if f["direction"] == "positive"],
+            negative_factors=[FactorItem(**f) for f in a.top_factors if f["direction"] == "negative"],
             recommendations=[RecommendationItem(**r) for r in a.recommendations],
             input_features=a.input_features,
             legal_disclaimer=LEGAL_DISCLAIMER,

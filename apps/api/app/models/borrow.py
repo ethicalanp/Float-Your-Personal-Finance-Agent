@@ -39,16 +39,10 @@ class BorrowAssessment(Base):
     model_version: Mapped[str] = mapped_column(String(64), nullable=False)
     feature_version: Mapped[str] = mapped_column(String(64), nullable=False)
     default_probability: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
-    readiness_band: Mapped[ReadinessBand] = mapped_column(
-        enum_type(ReadinessBand, "readiness_band"), nullable=False
-    )
+    readiness_band: Mapped[ReadinessBand] = mapped_column(enum_type(ReadinessBand, "readiness_band"), nullable=False)
     top_factors: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, default=list, server_default=text("'[]'"), nullable=False
     )
-    recommendations: Mapped[list[Any]] = mapped_column(
-        JSONB, default=list, server_default=text("'[]'"), nullable=False
-    )
+    recommendations: Mapped[list[Any]] = mapped_column(JSONB, default=list, server_default=text("'[]'"), nullable=False)
     input_features: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

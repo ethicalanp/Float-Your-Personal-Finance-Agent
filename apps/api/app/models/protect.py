@@ -66,9 +66,7 @@ class ScamCheckLog(Base):
     is_scam: Mapped[bool] = mapped_column(default=False, server_default=sql_text("false"), nullable=False)
     user_feedback_accurate: Mapped[bool | None] = mapped_column()
     user_feedback_notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class RecoveryCase(Base):
@@ -86,9 +84,7 @@ class RecoveryCase(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False)
     scam_check_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
-    incident_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    incident_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     scam_type: Mapped[str] = mapped_column(
         String(64), default="phishing", server_default=sql_text("'phishing'"), nullable=False
     )
@@ -108,9 +104,7 @@ class RecoveryCase(Base):
     steps_completed: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, default=list, server_default=sql_text("'[]'"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -160,9 +154,7 @@ class ScamSample(Base):
         String(64), default="user_submission", server_default=sql_text("'user_submission'"), nullable=False
     )
     labeled_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class AuditTrail(Base):
@@ -188,6 +180,4 @@ class AuditTrail(Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

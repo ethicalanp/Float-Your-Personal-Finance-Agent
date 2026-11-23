@@ -66,9 +66,7 @@ class Account(Base):
         Numeric(14, 2), default=Decimal("0.00"), server_default=text("0"), nullable=False
     )
     reported_balance_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="account")
@@ -133,9 +131,7 @@ class TransactionImport(Base):
     retry_count: Mapped[int] = mapped_column(default=0, server_default=text("0"), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class Transaction(Base):
@@ -164,9 +160,7 @@ class Transaction(Base):
     import_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
     transaction_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    transaction_type: Mapped[TransactionType] = mapped_column(
-        enum_type(TransactionType, "txn_type"), nullable=False
-    )
+    transaction_type: Mapped[TransactionType] = mapped_column(enum_type(TransactionType, "txn_type"), nullable=False)
     category: Mapped[str] = mapped_column(String(64), default="Other", server_default=text("'Other'"), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     description_cleaned: Mapped[str] = mapped_column(Text, nullable=False)
@@ -182,8 +176,6 @@ class Transaction(Base):
         nullable=False,
     )
     is_recurring: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     account: Mapped[Account] = relationship(back_populates="transactions")

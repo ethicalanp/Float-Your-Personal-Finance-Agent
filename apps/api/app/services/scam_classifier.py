@@ -38,10 +38,12 @@ def build_tfidf_pipeline() -> Pipeline:
         sublinear_tf=True,
         max_features=5000,
     )
-    union = FeatureUnion([
-        ("word_tfidf", word_vectorizer),
-        ("char_tfidf", char_vectorizer),
-    ])
+    union = FeatureUnion(
+        [
+            ("word_tfidf", word_vectorizer),
+            ("char_tfidf", char_vectorizer),
+        ]
+    )
     classifier = LogisticRegression(
         C=1.5,
         class_weight="balanced",
