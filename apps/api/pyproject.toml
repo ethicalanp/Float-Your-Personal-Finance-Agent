@@ -37,6 +37,9 @@ training = [
 mcp = [
     "fastmcp>=4.2.0",
 ]
+training = [
+    "mlflow>=2.18.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
