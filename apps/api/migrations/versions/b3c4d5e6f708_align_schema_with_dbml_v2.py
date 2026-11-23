@@ -359,7 +359,21 @@ def upgrade() -> None:
             if index.unique:
                 index.create(bind, checkfirst=True)
 
-    Base.metadata.create_all(bind=bind, checkfirst=True)
+    v2_tables = [
+        Base.metadata.tables[name]
+        for name in (
+            "user_consents",
+            "transaction_imports",
+            "borrow_assessments",
+            "conversations",
+            "messages",
+            "verified_contacts",
+            "knowledge_documents",
+            "knowledge_chunks",
+        )
+        if name in Base.metadata.tables
+    ]
+    Base.metadata.create_all(bind=bind, tables=v2_tables, checkfirst=True)
 
     # Existing tables are not changed by create_all, so explicitly install their indexes.
     for table_name in _LEGACY_TABLES:

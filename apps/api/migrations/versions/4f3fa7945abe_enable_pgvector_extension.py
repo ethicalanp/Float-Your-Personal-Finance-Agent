@@ -11,8 +11,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Enable pgvector for vector similarity search."""
+    """Enable pgvector and pg_trgm extensions."""
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
 
 def downgrade() -> None:

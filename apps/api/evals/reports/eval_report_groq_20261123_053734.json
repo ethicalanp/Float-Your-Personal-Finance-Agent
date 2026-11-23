@@ -1,0 +1,183 @@
+{
+  "timestamp": "20261123_053734",
+  "git_commit": "8c1443daff",
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "embedding_model": "multilingual-e5-base",
+  "prompt_version": "composer_v1",
+  "dataset_versions": {
+    "finance_tools": "v1",
+    "routing": "v1",
+    "rag": "v1",
+    "answers": "v1",
+    "combined": "v1",
+    "security": "v1"
+  },
+  "overall_passed": false,
+  "suites": {
+    "answers": {
+      "suite_name": "answers",
+      "passed": false,
+      "sample_size": 30,
+      "metrics": {
+        "status_accuracy": {
+          "metric_name": "status_accuracy",
+          "mean": 0.8,
+          "ci_95_low": 0.6269,
+          "ci_95_high": 0.9049,
+          "sample_size": 30,
+          "target": 0.9,
+          "target_met": false,
+          "is_indicative": false,
+          "unit": "%"
+        },
+        "citation_validity": {
+          "metric_name": "citation_validity",
+          "mean": 1.0,
+          "ci_95_low": 0.8865,
+          "ci_95_high": 1.0,
+          "sample_size": 30,
+          "target": 1.0,
+          "target_met": true,
+          "is_indicative": false,
+          "unit": "%"
+        },
+        "forbidden_claim_rate": {
+          "metric_name": "forbidden_claim_rate",
+          "mean": 0.0,
+          "ci_95_low": 0.0,
+          "ci_95_high": 0.1135,
+          "sample_size": 30,
+          "target": 0.0,
+          "target_met": true,
+          "is_indicative": false,
+          "unit": "%"
+        },
+        "invented_contact_rate": {
+          "metric_name": "invented_contact_rate",
+          "mean": 0.0,
+          "ci_95_low": 0.0,
+          "ci_95_high": 0.1135,
+          "sample_size": 30,
+          "target": 0.0,
+          "target_met": true,
+          "is_indicative": false,
+          "unit": "%"
+        },
+        "structured_output_validity": {
+          "metric_name": "structured_output_validity",
+          "mean": 0.9333,
+          "ci_95_low": 0.7868,
+          "ci_95_high": 0.9815,
+          "sample_size": 30,
+          "target": 0.99,
+          "target_met": false,
+          "is_indicative": false,
+          "unit": "%"
+        },
+        "faithfulness": {
+          "metric_name": "faithfulness",
+          "mean": 0.8,
+          "ci_95_low": 0.6269,
+          "ci_95_high": 0.9049,
+          "sample_size": 30,
+          "target": 0.9,
+          "target_met": false,
+          "is_indicative": false,
+          "unit": "%"
+        }
+      },
+      "latency_p50_ms": 12561.01,
+      "latency_p95_ms": 29106.82,
+      "token_usage": {},
+      "retries": 0,
+      "failures": [
+        {
+          "id": "ans-ml-01",
+          "reason": "Expected status answered, got insufficient_evidence"
+        },
+        {
+          "id": "ans-ml-02",
+          "reason": "Expected status answered, got insufficient_evidence"
+        },
+        {
+          "id": "ans-ml-03",
+          "reason": "Expected status answered, got insufficient_evidence"
+        },
+        {
+          "id": "ans-ml-04",
+          "reason": "Expected status answered, got insufficient_evidence"
+        },
+        {
+          "id": "ans-man-03",
+          "reason": "Expected status answered, got insufficient_evidence"
+        },
+        {
+          "id": "ans-en-12",
+          "reason": "Expected status answered, got insufficient_evidence"
+        }
+      ],
+      "security_violations": [],
+      "warnings": []
+    }
+  },
+  "targets": {
+    "financial_correctness": {
+      "required": "100.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "cross_user_blocked": {
+      "required": "100.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "pii_masking": {
+      "required": "100.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "citation_validity": {
+      "required": "100.0%",
+      "mean": 1.0,
+      "ci_95": "[88.65%, 100.00%]",
+      "sample_size": 30,
+      "target_met": true
+    },
+    "invented_contact_rate": {
+      "required": "0.0%",
+      "mean": 0.0,
+      "ci_95": "[0.00%, 11.35%]",
+      "sample_size": 30,
+      "target_met": true
+    },
+    "structured_output_validity": {
+      "required": ">= 99.0%",
+      "mean": 0.9333,
+      "ci_95": "[78.68%, 98.15%]",
+      "sample_size": 30,
+      "target_met": false
+    },
+    "recall_at_5": {
+      "required": ">= 85.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "faithfulness": {
+      "required": ">= 90.0%",
+      "mean": 0.8,
+      "ci_95": "[62.69%, 90.49%]",
+      "sample_size": 30,
+      "target_met": false
+    }
+  },
+  "regression_comparison": null
+}

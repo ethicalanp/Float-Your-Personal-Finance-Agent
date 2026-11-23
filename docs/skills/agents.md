@@ -1,0 +1,21 @@
+# Orchestration and tools skill
+- Router: rules first, small classifier next, LLM fallback only when unsure. Fraud wording always routes to protect. `unclear` asks ONE clarifying question.
+- Orchestrator: explicit state machine (consent, mask, route, plan, tools/retrieve, validate, compose, validate, respond or fallback). No LangGraph unless evaluation shows it helps.
+- Limits: max 4 tool calls, max 4 steps, max 500 rows, 10.0s time budget. Exceeding a limit degrades gracefully.
+- Tools: Pydantic input/output, per-call timeout, read-only DB transaction, ownership check. No user_id in LLM-visible schemas. All money math in Decimal.
+- Every tool result carries facts[] {id, label, value, unit, period}. Numeric grounding: every number in an answer matches a fact or a registered derivation, else repair once, then templated fallback.
+- Borrow: indicative readiness only. If unavailable, say so. No write actions.
+- Agent planner (`app/ai/agent/planner.py`): the LLM proposes a plan strictly as structured JSON naming tools from the allowed 10-tool catalogue, validated against Pydantic schemas. Max 4 steps, max 4 tool calls, and time budget enforced. An invalid plan or LLM outage falls back to the deterministic router path.
+- Draft confirmation:
+  - `draft_complaint` creates drafts with status `pending_confirmation` (masked, user-scoped, 24h expiry).
+  - Lifecycle endpoints: `POST /api/v1/assistant/drafts/{id}/confirm` and `POST /api/v1/assistant/drafts/{id}/discard`.
+  - Only confirmed drafts can be exported via `GET /api/v1/assistant/drafts/{id}/export` (copyable text/plain). Nothing is ever sent out.
+- Conversation storage:
+  - User and assistant messages stored in `Message.content_masked`. Only masked text is ever persisted; raw PAN, Aadhaar, phone numbers, or account details are never saved.
+- Traces:
+  - Every agent run writes an `AgentTrace` record (run_id, trace_id, steps, tool names, argument summaries, status, duration, validation outcomes).
+  - No raw text or exact financial amounts in traces.
+  - User can retrieve their own trace metadata via `GET /api/v1/assistant/traces/{id}` with strict user isolation.
+- Scenario evaluations:
+  - 30 scenarios across English, Malayalam, and Manglish in `evals/datasets/agent_scenarios_v1.jsonl` ("generated, not human-reviewed").
+  - Runner: `python -m app.ai.evals.run --suite agent` tracking n, Wilson 95% CI pass rate, steps/run, fallback rate, and p50/p95 latency. Zero tolerance for security violations.

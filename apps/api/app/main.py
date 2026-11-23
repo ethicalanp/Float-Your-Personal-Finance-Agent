@@ -1,3 +1,8 @@
+import os
+import traceback
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -10,6 +15,28 @@ from app.core.errors import AppException, format_error_response
 from app.core.middleware import RequestContextMiddleware, setup_json_logging
 
 
+@asynccontextmanager
+async def app_lifespan(app_instance: FastAPI) -> AsyncGenerator[None, None]:
+    """Lifespan handler: auto-initializes local SQLite tables in development."""
+    settings_obj: Settings = app_instance.state.settings
+    db_url = settings_obj.database_url
+    if "sqlite" in db_url and settings_obj.app_env == "development":
+        import app.models  # noqa: F401
+        from app.db.session import Base, get_async_engine
+        from app.models.knowledge import KnowledgeChunk
+        from app.models.recurring import (  # noqa: F401
+            RecurringCommitment,
+            RecurringNotification,
+            RecurringOccurrence,
+        )
+
+        engine = get_async_engine()
+        async with engine.begin() as conn:
+            sqlite_tables = [table for table in Base.metadata.sorted_tables if table is not KnowledgeChunk.__table__]
+            await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=sqlite_tables))
+    yield
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the application. Tests pass their own settings; production uses the environment."""
     settings = settings or get_settings()
@@ -17,13 +44,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Configure structured JSON logging
     setup_json_logging(settings.log_level)
 
+    # Debug tracebacks are strictly disabled unless ENV=local
+    env_str = os.environ.get("ENV", settings.app_env).lower()
+    is_local_env = env_str in ("local", "loc")
+    effective_debug = settings.debug and is_local_env
+
     application = FastAPI(
         title=settings.app_name,
         version=__version__,
-        debug=settings.debug,
+        debug=effective_debug,
         docs_url="/docs" if settings.docs_enabled else None,
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
+        lifespan=app_lifespan,
     )
     application.state.settings = settings
 
@@ -73,11 +106,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         req_id = getattr(request.state, "request_id", None)
+        details: list[dict[str, str]] = []
+        if is_local_env and settings.debug:
+            details = [{"traceback": traceback.format_exc()}]
         return JSONResponse(
             status_code=500,
             content=format_error_response(
                 code="INTERNAL_SERVER_ERROR",
                 message="An unexpected server error occurred.",
+                details=details,
                 request_id=req_id,
             ),
         )

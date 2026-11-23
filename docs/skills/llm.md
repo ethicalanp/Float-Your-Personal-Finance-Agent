@@ -1,0 +1,19 @@
+# LLM gateway skill
+- One interface, provider adapters by config. One OpenAI-compatible adapter covers Groq, OpenAI, Azure, Together, vLLM.
+- Configuration env vars:
+  - `PFA_LLM_PROVIDER`: `fake` (CI default) or `groq`.
+  - `PFA_LLM_MODEL`: Active model name (verified default for Groq: `openai/gpt-oss-120b`).
+  - `PFA_LLM_BASE_URL`: Base URL (default for Groq: `https://api.groq.com/openai/v1`).
+  - `GROQ_API_KEY` / `PFA_LLM_API_KEY`: Secret API token loaded strictly from local git-ignored `.env`. Never logged, exposed, or committed.
+- Models & Structured Outputs:
+  - Groq `openai/gpt-oss-120b` supports strict JSON schema (`json_schema` with `strict: true`).
+  - Strict schemas require `additionalProperties: false` and all properties marked `required` across every object node.
+  - Reasoning models consume tokens for internal reasoning before generation; `max_tokens` must be allocated generously (min 1500 tokens).
+- Rate limits & Resilience:
+  - Groq free tier: Concurrency strictly capped at 1-2.
+  - Honours `Retry-After` header directly up to 60s with jittered backoff.
+  - Circuit breaker trips on consecutive 5xx/timeouts; 429s during evaluation runs are recorded as "skipped", not test failures.
+- Malayalam & Manglish quality findings:
+  - Under real multilingual-e5 retrieval, `openai/gpt-oss-120b` generates fluent, natural Malayalam and Manglish with grounded helpline numbers (1930) and zero hallucinated contacts.
+  - Under fake-embedder retrieval, zero passages pass threshold, causing pre-LLM abstention (`insufficient_evidence`).
+  - English-fallback rule: Retain English fallback for low-confidence or unparseable regulatory extracts, but keep native Malayalam/Manglish generation enabled when grounded evidence is retrieved.
