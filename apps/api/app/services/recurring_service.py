@@ -305,15 +305,17 @@ def detect_suggested_recurring(transactions: list[dict[str, Any]]) -> list[dict[
                 latest_date = datetime.fromisoformat(latest_date)
             due_day = latest_date.day
 
-            suggestions.append({
-                "merchant": merchant_key.title(),
-                "suggested_name": f"{merchant_key.title()} Subscription",
-                "category": latest.get("category", "Subscriptions"),
-                "expected_amount": round(avg_amount, 2),
-                "frequency": "monthly",
-                "due_rule_day": due_day,
-                "confidence": "high" if len(txs) >= 4 else "medium",
-                "detected_occurrences_count": len(txs),
-            })
+            suggestions.append(
+                {
+                    "merchant": merchant_key.title(),
+                    "suggested_name": f"{merchant_key.title()} Subscription",
+                    "category": latest.get("category", "Subscriptions"),
+                    "expected_amount": round(avg_amount, 2),
+                    "frequency": "monthly",
+                    "due_rule_day": due_day,
+                    "confidence": "high" if len(txs) >= 4 else "medium",
+                    "detected_occurrences_count": len(txs),
+                }
+            )
 
     return suggestions

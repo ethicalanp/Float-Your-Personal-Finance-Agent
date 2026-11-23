@@ -230,10 +230,13 @@ def test_sync_notifications_are_idempotent_and_can_be_read(
         headers=auth_headers,
     )
     assert read_res.status_code == 204
-    assert client.get(
-        "/api/v1/recurring/notifications?unread_only=true",
-        headers=auth_headers,
-    ).json() == []
+    assert (
+        client.get(
+            "/api/v1/recurring/notifications?unread_only=true",
+            headers=auth_headers,
+        ).json()
+        == []
+    )
 
     commitment_id = commitment_res.json()["id"]
     deactivate_res = client.delete(
@@ -241,7 +244,10 @@ def test_sync_notifications_are_idempotent_and_can_be_read(
         headers=auth_headers,
     )
     assert deactivate_res.status_code == 204
-    assert client.get(
-        "/api/v1/recurring/notifications",
-        headers=auth_headers,
-    ).json() == []
+    assert (
+        client.get(
+            "/api/v1/recurring/notifications",
+            headers=auth_headers,
+        ).json()
+        == []
+    )

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_DEV_JWT_SECRET = "dev-insecure-secret-key-change-in-production-min32bytes"
@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="PFA_",
-        env_file=".env",
+        env_file=(".env", "apps/api/.env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -25,14 +25,19 @@ class Settings(BaseSettings):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
-    # PostgreSQL connection URL; using psycopg 3 (postgresql+psycopg://).
-    database_url: str | None = None
+    # Database URL. In production, PostgreSQL with psycopg 3 is strictly required.
+    # In local development, falls back to local SQLite if PFA_DATABASE_URL is unset.
+    database_url: str = "sqlite+aiosqlite:///dev.db"
 
     # Security & JWT configuration
     jwt_secret_key: str = INSECURE_DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30  # 15 to 30 minutes for security
+    internal_metrics_token: SecretStr | None = None
     borrow_model_path: str | None = None
+    enable_synthetic_ml_demos: bool = False
+    synthetic_borrow_demo_model_path: str | None = None
+    synthetic_scam_demo_model_path: str | None = None
 
     @property
     def docs_enabled(self) -> bool:
@@ -44,6 +49,8 @@ class Settings(BaseSettings):
         if self.app_env == "production":
             if self.debug:
                 raise ValueError("debug must be false when app_env is production")
+            if self.enable_synthetic_ml_demos:
+                raise ValueError("synthetic ML demos must remain disabled in production")
             if (
                 not self.jwt_secret_key
                 or self.jwt_secret_key == INSECURE_DEV_JWT_SECRET
@@ -52,8 +59,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "PFA_JWT_SECRET_KEY must be a cryptographically strong secret (min 32 chars) in production"
                 )
-            if not self.database_url:
-                raise ValueError("PFA_DATABASE_URL must be configured when app_env is production")
+            if not self.database_url or "sqlite" in self.database_url:
+                raise ValueError(
+                    "PFA_DATABASE_URL must be configured with a PostgreSQL URL (postgresql+psycopg://) in production"
+                )
         return self
 
 

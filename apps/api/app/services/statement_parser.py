@@ -79,7 +79,7 @@ def parse_csv_statement(content_str: str, account_id: str) -> list[dict[str, Any
 
     parsed_transactions: list[dict[str, Any]] = []
 
-    for row in rows[header_idx + 1:]:
+    for row in rows[header_idx + 1 :]:
         if not row or len(row) <= date_col:
             continue
 
@@ -94,15 +94,15 @@ def parse_csv_statement(content_str: str, account_id: str) -> list[dict[str, Any
         credit_val = 0.0
 
         if debit_col != -1 and debit_col < len(row):
-            clean_debit = re.sub(r'[^\d.]', '', row[debit_col])
+            clean_debit = re.sub(r"[^\d.]", "", row[debit_col])
             debit_val = float(clean_debit) if clean_debit else 0.0
 
         if credit_col != -1 and credit_col < len(row):
-            clean_credit = re.sub(r'[^\d.]', '', row[credit_col])
+            clean_credit = re.sub(r"[^\d.]", "", row[credit_col])
             credit_val = float(clean_credit) if clean_credit else 0.0
 
         if debit_val == 0.0 and credit_val == 0.0 and amount_col != -1 and amount_col < len(row):
-            clean_amt = re.sub(r'[^\d.]', '', row[amount_col])
+            clean_amt = re.sub(r"[^\d.]", "", row[amount_col])
             amt = float(clean_amt) if clean_amt else 0.0
             t_type = "debit"
             if (
@@ -129,19 +129,21 @@ def parse_csv_statement(content_str: str, account_id: str) -> list[dict[str, Any
         masked_desc = mask_sensitive_data(raw_desc)
         fingerprint = compute_transaction_fingerprint(account_id, parsed_date, amount, t_type, raw_desc)
 
-        parsed_transactions.append({
-            "account_id": account_id,
-            "date": parsed_date,
-            "amount": amount,
-            "transaction_type": t_type,
-            "category": category,
-            "description": raw_desc,
-            "description_cleaned": masked_desc,
-            "merchant": merchant,
-            "fingerprint": fingerprint,
-            "source": "csv_upload",
-            "is_recurring": False,
-        })
+        parsed_transactions.append(
+            {
+                "account_id": account_id,
+                "date": parsed_date,
+                "amount": amount,
+                "transaction_type": t_type,
+                "category": category,
+                "description": raw_desc,
+                "description_cleaned": masked_desc,
+                "merchant": merchant,
+                "fingerprint": fingerprint,
+                "source": "csv_upload",
+                "is_recurring": False,
+            }
+        )
 
     return parsed_transactions
 
@@ -153,7 +155,7 @@ def parse_sms_statement(sms_text: str, account_id: str) -> dict[str, Any] | None
         return None
 
     # Detect Amount
-    amt_match = re.search(r'(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)', text, re.IGNORECASE)
+    amt_match = re.search(r"(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)", text, re.IGNORECASE)
     if not amt_match:
         return None
 
@@ -162,11 +164,11 @@ def parse_sms_statement(sms_text: str, account_id: str) -> dict[str, Any] | None
 
     # Detect transaction type (debit / credit)
     t_type = "debit"
-    if re.search(r'\b(credited|received|deposited|refunded)\b', text, re.IGNORECASE):
+    if re.search(r"\b(credited|received|deposited|refunded)\b", text, re.IGNORECASE):
         t_type = "credit"
 
     # Detect merchant / entity
-    merchant_pattern = r'(?:at|to|info\/|by)\s+([A-Za-z0-9\s.\-_]+?)(?:\s+on|\s+ref|\.|\s+avail|\s+bal)'
+    merchant_pattern = r"(?:at|to|info\/|by)\s+([A-Za-z0-9\s.\-_]+?)(?:\s+on|\s+ref|\.|\s+avail|\s+bal)"
     merchant_match = re.search(merchant_pattern, text, re.IGNORECASE)
     merchant_raw = merchant_match.group(1).strip() if merchant_match else ""
 

@@ -1,23 +1,23 @@
 import re
 
 # Regex patterns for sensitive financial and PII elements in India
-PHONE_REGEX = re.compile(r'(?:\+?91[\s\-]?)?(?<!\d)[6-9]\d{9}(?!\d)')
-CARD_REGEX = re.compile(r'(?<!\d)\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?!\d)')
-ACCOUNT_REGEX = re.compile(r'(?<!\d)\d{10,18}(?!\d)')
-UPI_REGEX = re.compile(r'[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}')
-EMAIL_REGEX = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
-AADHAAR_REGEX = re.compile(r'(?<!\d)\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?!\d)')
-PAN_REGEX = re.compile(r'(?<![A-Z])[A-Z]{5}[0-9]{4}[A-Z](?![A-Z])')
+PHONE_REGEX = re.compile(r"(?:\+?91[\s\-]?)?(?<!\d)[6-9]\d{9}(?!\d)")
+CARD_REGEX = re.compile(r"(?<!\d)\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?!\d)")
+ACCOUNT_REGEX = re.compile(r"(?<!\d)\d{10,18}(?!\d)")
+UPI_REGEX = re.compile(r"[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}")
+EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+AADHAAR_REGEX = re.compile(r"(?<!\d)\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?!\d)")
+PAN_REGEX = re.compile(r"(?<![A-Z])[A-Z]{5}[0-9]{4}[A-Z](?![A-Z])")
 
 
 def mask_phone(match: re.Match) -> str:
-    val = re.sub(r'[\s\-]', '', match.group(0))
+    val = re.sub(r"[\s\-]", "", match.group(0))
     last4 = val[-4:]
     return f"+91-XXXXX-X{last4}"
 
 
 def mask_card(match: re.Match) -> str:
-    val = re.sub(r'[\s\-]', '', match.group(0))
+    val = re.sub(r"[\s\-]", "", match.group(0))
     last4 = val[-4:]
     return f"****-****-****-{last4}"
 

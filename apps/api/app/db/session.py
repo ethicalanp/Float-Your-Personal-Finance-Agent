@@ -1,8 +1,16 @@
+import sys
 from collections.abc import AsyncGenerator
 from functools import lru_cache
 from typing import Any
 
+if sys.platform == "win32":
+    import asyncio
+
+    if not isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -14,8 +22,17 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from app.core.config import get_settings
 
 
+def to_sync_database_url(database_url: str) -> str:
+    """Convert supported async database URLs to their synchronous drivers."""
+    url = make_url(database_url)
+    if url.drivername == "sqlite+aiosqlite":
+        url = url.set(drivername="sqlite")
+    return url.render_as_string(hide_password=False)
+
+
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
+
     pass
 
 
@@ -50,7 +67,7 @@ def get_sync_engine() -> Any:
         raise RuntimeError("PFA_DATABASE_URL is not configured.")
 
     return create_engine(
-        settings.database_url,
+        to_sync_database_url(settings.database_url),
         pool_pre_ping=True,
     )
 

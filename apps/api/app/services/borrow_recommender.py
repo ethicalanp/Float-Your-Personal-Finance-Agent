@@ -32,11 +32,7 @@ def generate_borrow_recommendations(
         )
 
     expense_ratio = features.get("expense_to_income_ratio")
-    if (
-        "expense_to_income_ratio" in adverse_features
-        and expense_ratio is not None
-        and expense_ratio > 0.80
-    ):
+    if "expense_to_income_ratio" in adverse_features and expense_ratio is not None and expense_ratio > 0.80:
         recommendations.append(
             {
                 "category": "Cash-flow flexibility",
@@ -49,11 +45,7 @@ def generate_borrow_recommendations(
         )
 
     volatility = features.get("income_volatility_cov")
-    if (
-        "income_volatility_cov" in adverse_features
-        and volatility is not None
-        and volatility > 0.50
-    ):
+    if "income_volatility_cov" in adverse_features and volatility is not None and volatility > 0.50:
         recommendations.append(
             {
                 "category": "Income consistency",
@@ -66,11 +58,7 @@ def generate_borrow_recommendations(
         )
 
     debt_ratio = features.get("debt_to_income_ratio")
-    if (
-        "debt_to_income_ratio" in adverse_features
-        and debt_ratio is not None
-        and debt_ratio > 0.35
-    ):
+    if "debt_to_income_ratio" in adverse_features and debt_ratio is not None and debt_ratio > 0.35:
         recommendations.append(
             {
                 "category": "Debt commitments",

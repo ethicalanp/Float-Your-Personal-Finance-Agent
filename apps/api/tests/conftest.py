@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -11,6 +10,8 @@ from app.core.config import Settings
 from app.db.session import Base, get_db
 from app.main import create_app
 from app.models.borrow import BorrowAssessment
+from app.models.conversations import Conversation, Message
+from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import (
     AuditTrail,
@@ -41,6 +42,10 @@ APP_TABLES = [
     RecurringOccurrence.__table__,
     RecurringNotification.__table__,
     BorrowAssessment.__table__,
+    KnowledgeDocument.__table__,
+    KnowledgeChunk.__table__,
+    Conversation.__table__,
+    Message.__table__,
 ]
 
 
@@ -51,6 +56,7 @@ def settings() -> Settings:
         app_env="test",
         database_url="sqlite+aiosqlite:///:memory:",
         jwt_secret_key="test-secret-key-for-unit-tests-only-min32chars",
+        internal_metrics_token="test-internal-metrics-token",
         _env_file=None,
     )
 
@@ -66,14 +72,15 @@ def app(settings: Settings) -> FastAPI:
         poolclass=StaticPool,
     )
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-
-    async def init_db() -> None:
-        async with engine.begin() as conn:
-            await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=APP_TABLES))
-
-    asyncio.run(init_db())
+    tables_initialized = False
 
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        nonlocal tables_initialized
+        if not tables_initialized:
+            async with engine.begin() as conn:
+                await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=APP_TABLES))
+            tables_initialized = True
+
         async with session_factory() as session:
             try:
                 yield session

@@ -93,9 +93,7 @@ def _parse_risk_tier(tier_str: str) -> RiskTier:
         return RiskTier(tier_str.upper().strip())
     except ValueError as err:
         valid_tiers = [t.value for t in RiskTier]
-        raise BadRequestException(
-            f"Invalid risk_tier '{tier_str}'. Allowed values are: {valid_tiers}"
-        ) from err
+        raise BadRequestException(f"Invalid risk_tier '{tier_str}'. Allowed values are: {valid_tiers}") from err
 
 
 def _record_audit_db(
@@ -381,9 +379,7 @@ async def update_recovery_case(
             case.status = CaseStatus(req.status.lower().strip())
         except ValueError as err:
             valid_statuses = [s.value for s in CaseStatus]
-            raise BadRequestException(
-                f"Invalid status '{req.status}'. Allowed values are: {valid_statuses}"
-            ) from err
+            raise BadRequestException(f"Invalid status '{req.status}'. Allowed values are: {valid_statuses}") from err
 
     if req.completed_step:
         updated_checklist = []

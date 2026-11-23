@@ -8,7 +8,7 @@ def normalize_description(description: str) -> str:
     if not description:
         return ""
     cleaned = description.lower()
-    cleaned = re.sub(r'[^a-z0-9\s]', ' ', cleaned)
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
     return " ".join(cleaned.split())
 
 

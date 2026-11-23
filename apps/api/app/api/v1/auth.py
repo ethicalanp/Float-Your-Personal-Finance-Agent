@@ -130,10 +130,7 @@ async def login(
         )
     )
     active_consents = {consent.consent_type for consent in consent_result.scalars().all()}
-    consent_given = (
-        ConsentType.TERMS in active_consents
-        and ConsentType.AI_DATA_PROCESSING in active_consents
-    )
+    consent_given = ConsentType.TERMS in active_consents and ConsentType.AI_DATA_PROCESSING in active_consents
 
     token = create_access_token(subject=str(user.id))
     return AuthTokenResponse(

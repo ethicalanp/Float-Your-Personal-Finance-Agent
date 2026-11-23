@@ -39,13 +39,15 @@ def compute_monthly_cash_flow(transactions: list[dict[str, Any]]) -> dict[str, A
         total_inflow += inflow
         total_outflow += outflow
 
-        breakdown.append({
-            "month": m,
-            "inflow": inflow,
-            "outflow": outflow,
-            "net_savings": net_savings,
-            "savings_rate_pct": savings_rate,
-        })
+        breakdown.append(
+            {
+                "month": m,
+                "inflow": inflow,
+                "outflow": outflow,
+                "net_savings": net_savings,
+                "savings_rate_pct": savings_rate,
+            }
+        )
 
     net_total = round(total_inflow - total_outflow, 2)
     overall_savings_rate = round((net_total / total_inflow * 100), 1) if total_inflow > 0 else 0.0
@@ -132,11 +134,13 @@ def compute_financial_insights(
     top_categories = []
     for cat, amt in sorted_categories[:5]:
         pct = round((amt / total_expense * 100), 1) if total_expense > 0 else 0.0
-        top_categories.append({
-            "category": cat,
-            "amount": round(amt, 2),
-            "percentage": pct,
-        })
+        top_categories.append(
+            {
+                "category": cat,
+                "amount": round(amt, 2),
+                "percentage": pct,
+            }
+        )
 
     return {
         "income_volatility": {

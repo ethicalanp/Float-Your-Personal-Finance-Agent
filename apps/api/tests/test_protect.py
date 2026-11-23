@@ -39,8 +39,14 @@ def test_scam_detector_multilingual() -> None:
     assert res_en["risk_tier"] in ["HIGH", "CRITICAL"]
     assert any(ind["category"] == "credential_harvesting" for ind in res_en["detected_indicators"])
 
+    otp_request = analyze_scam_message("SYNTHETIC TEST ONLY: account blocked, please share your OTP.")
+    assert otp_request["is_scam"] is True
+    assert any(ind["category"] == "credential_harvesting" for ind in otp_request["detected_indicators"])
+
     # 2. Malayalam Scam
-    ml_scam = "അടിയന്തിരമായി കെവൈസി അപ്ഡേറ്റ് ചെയ്യുക. അല്ലെങ്കിൽ ഇന്നു രാത്രി വൈദ്യുതി വിച്ഛേദിക്കും. ലിങ്കിൽ ക്ലിക്ക് ചെയ്യുക: http://bit.ly/eb"
+    ml_scam = (
+        "അടിയന്തിരമായി കെവൈസി അപ്ഡേറ്റ് ചെയ്യുക. അല്ലെങ്കിൽ ഇന്നു രാത്രി വൈദ്യുതി വിച്ഛേദിക്കും. ലിങ്കിൽ ക്ലിക്ക് ചെയ്യുക: http://bit.ly/eb"
+    )
     res_ml = analyze_scam_message(ml_scam)
     assert res_ml["is_scam"] is True
     assert res_ml["language"] == "ml"
