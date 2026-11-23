@@ -1,3 +1,6 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -8,6 +11,30 @@ from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import AppException, format_error_response
 from app.core.middleware import RequestContextMiddleware, setup_json_logging
+
+
+@asynccontextmanager
+async def app_lifespan(app_instance: FastAPI) -> AsyncGenerator[None, None]:
+    """Lifespan handler: auto-initializes local SQLite tables in development."""
+    settings_obj: Settings = app_instance.state.settings
+    db_url = settings_obj.database_url
+    if "sqlite" in db_url and settings_obj.app_env != "production":
+        import app.models  # noqa: F401
+        from app.db.session import Base, get_async_engine
+        from app.models.knowledge import KnowledgeChunk
+        from app.models.recurring import (  # noqa: F401
+            RecurringCommitment,
+            RecurringNotification,
+            RecurringOccurrence,
+        )
+
+        engine = get_async_engine()
+        async with engine.begin() as conn:
+            sqlite_tables = [
+                table for table in Base.metadata.sorted_tables if table is not KnowledgeChunk.__table__
+            ]
+            await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=sqlite_tables))
+    yield
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -24,6 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/docs" if settings.docs_enabled else None,
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
+        lifespan=app_lifespan,
     )
     application.state.settings = settings
 

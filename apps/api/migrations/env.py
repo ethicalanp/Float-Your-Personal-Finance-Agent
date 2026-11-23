@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
+from app.db.session import to_sync_database_url
 from app.models import Base
 
 config = context.config
@@ -16,10 +17,9 @@ settings = get_settings()
 if not settings.database_url:
     raise RuntimeError("PFA_DATABASE_URL is not configured.")
 
-# Standard Psycopg 3 database URL works for both async and sync execution
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url.replace("%", "%%"),
+    to_sync_database_url(settings.database_url).replace("%", "%%"),
 )
 
 target_metadata = Base.metadata
