@@ -11,7 +11,6 @@ from app.db.session import Base, get_db
 from app.main import create_app
 from app.models.borrow import BorrowAssessment
 from app.models.conversations import Conversation, Message
-from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import (
     AuditTrail,
@@ -42,8 +41,6 @@ APP_TABLES = [
     RecurringOccurrence.__table__,
     RecurringNotification.__table__,
     BorrowAssessment.__table__,
-    KnowledgeDocument.__table__,
-    KnowledgeChunk.__table__,
     Conversation.__table__,
     Message.__table__,
 ]
