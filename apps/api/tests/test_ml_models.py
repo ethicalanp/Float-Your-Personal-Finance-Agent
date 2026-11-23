@@ -29,15 +29,17 @@ def test_safe_divide_handles_zero_and_infinite() -> None:
 
 
 def test_home_credit_financial_feature_engineering() -> None:
-    raw_data = pd.DataFrame({
-        "AMT_CREDIT": [100000.0, 50000.0],
-        "AMT_INCOME_TOTAL": [50000.0, 25000.0],
-        "AMT_ANNUITY": [10000.0, 5000.0],
-        "AMT_GOODS_PRICE": [90000.0, 45000.0],
-        "CNT_FAM_MEMBERS": [2, 1],
-        "DAYS_EMPLOYED": [SENTINEL_DAYS_EMPLOYED, -1500],
-        "DAYS_BIRTH": [-10000, -12000],
-    })
+    raw_data = pd.DataFrame(
+        {
+            "AMT_CREDIT": [100000.0, 50000.0],
+            "AMT_INCOME_TOTAL": [50000.0, 25000.0],
+            "AMT_ANNUITY": [10000.0, 5000.0],
+            "AMT_GOODS_PRICE": [90000.0, 45000.0],
+            "CNT_FAM_MEMBERS": [2, 1],
+            "DAYS_EMPLOYED": [SENTINEL_DAYS_EMPLOYED, -1500],
+            "DAYS_BIRTH": [-10000, -12000],
+        }
+    )
     fe = engineer_financial_features(raw_data)
 
     assert np.isnan(fe.loc[0, "DAYS_EMPLOYED"])
@@ -74,9 +76,11 @@ def test_home_credit_training_requires_provenance_before_reading_data(tmp_path: 
 
 
 def test_fairness_metrics_computation() -> None:
-    df = pd.DataFrame({
-        "CODE_GENDER": ["F"] * 50 + ["M"] * 50,
-    })
+    df = pd.DataFrame(
+        {
+            "CODE_GENDER": ["F"] * 50 + ["M"] * 50,
+        }
+    )
     # Scenario: balanced approval
     y_true = np.array([0] * 40 + [1] * 10 + [0] * 40 + [1] * 10)
     y_pred = np.array([0] * 38 + [1] * 12 + [0] * 37 + [1] * 13)

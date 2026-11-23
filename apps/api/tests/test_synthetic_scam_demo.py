@@ -34,16 +34,10 @@ def test_scam_demo_uses_grouped_splits_and_serves_explicit_artifact(
     generate_synthetic_datasets(data_dir, row_count=200)
     comparison = train_synthetic_scam_demo(data_dir, output_dir)
 
-    split_groups = {
-        name: set(groups)
-        for name, groups in comparison["split_groups"].items()
-    }
+    split_groups = {name: set(groups) for name, groups in comparison["split_groups"].items()}
     split_names = list(split_groups)
     for index, name in enumerate(split_names):
-        assert all(
-            not split_groups[name].intersection(split_groups[other])
-            for other in split_names[index + 1 :]
-        )
+        assert all(not split_groups[name].intersection(split_groups[other]) for other in split_names[index + 1 :])
     assert set(comparison["per_language"]) == {"en", "ml", "manglish"}
     assert "pr_auc" in comparison["per_language"]["en"]["tfidf"]
     assert "expected_calibration_error_10_bins" in comparison["per_language"]["en"]["tfidf"]

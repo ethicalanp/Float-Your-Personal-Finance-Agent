@@ -10,6 +10,11 @@ from app.models.protect import (
     ScamSample,
     VerifiedContact,
 )
+from app.models.recurring import (
+    RecurringCommitment,
+    RecurringNotification,
+    RecurringOccurrence,
+)
 from app.models.user import Consent, User
 
 __all__ = [
@@ -23,6 +28,9 @@ __all__ = [
     "KnowledgeDocument",
     "Message",
     "RecoveryCase",
+    "RecurringCommitment",
+    "RecurringNotification",
+    "RecurringOccurrence",
     "ScamCheckLog",
     "ScamSample",
     "Transaction",

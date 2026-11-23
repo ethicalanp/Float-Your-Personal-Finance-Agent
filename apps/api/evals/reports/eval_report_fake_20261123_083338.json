@@ -1,0 +1,125 @@
+{
+  "timestamp": "20261123_083338",
+  "git_commit": "be3d6ab4bd",
+  "provider": "fake",
+  "model": "fake-eval-v1",
+  "embedding_model": "multilingual-e5-base",
+  "prompt_version": "composer_v1",
+  "dataset_versions": {
+    "finance_tools": "v1",
+    "routing": "v1",
+    "rag": "v1",
+    "answers": "v1",
+    "combined": "v1",
+    "security": "v1"
+  },
+  "overall_passed": true,
+  "suites": {
+    "agent": {
+      "suite_name": "agent",
+      "passed": true,
+      "sample_size": 30,
+      "metrics": {
+        "agent_pass_rate": {
+          "metric_name": "agent_pass_rate",
+          "mean": 1.0,
+          "ci_95_low": 0.8865,
+          "ci_95_high": 1.0,
+          "sample_size": 30,
+          "target": 0.9,
+          "target_met": true,
+          "is_indicative": false,
+          "unit": "%"
+        },
+        "steps_within_limit": {
+          "metric_name": "steps_within_limit",
+          "mean": 1.0,
+          "ci_95_low": 0.8865,
+          "ci_95_high": 1.0,
+          "sample_size": 30,
+          "target": 1.0,
+          "target_met": true,
+          "is_indicative": false,
+          "unit": "%"
+        },
+        "fallback_rate": {
+          "metric_name": "fallback_rate",
+          "mean": 0.4667,
+          "ci_95_low": 0.3023,
+          "ci_95_high": 0.6386,
+          "sample_size": 30,
+          "target": null,
+          "target_met": null,
+          "is_indicative": false,
+          "unit": "%"
+        }
+      },
+      "latency_p50_ms": 6.635099998675287,
+      "latency_p95_ms": 282.5194000033662,
+      "token_usage": {},
+      "retries": 0,
+      "failures": [],
+      "security_violations": [],
+      "warnings": []
+    }
+  },
+  "targets": {
+    "financial_correctness": {
+      "required": "100.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "cross_user_blocked": {
+      "required": "100.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "pii_masking": {
+      "required": "100.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "citation_validity": {
+      "required": "100.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "invented_contact_rate": {
+      "required": "0.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "structured_output_validity": {
+      "required": ">= 99.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "recall_at_5": {
+      "required": ">= 85.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    },
+    "faithfulness": {
+      "required": ">= 90.0%",
+      "mean": null,
+      "ci_95": "N/A",
+      "sample_size": 0,
+      "target_met": null
+    }
+  },
+  "regression_comparison": null
+}

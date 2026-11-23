@@ -1,0 +1,17 @@
+# MCP skill (FastMCP)
+- The MCP server is a thin adapter over the existing tool registry and executor. No duplicate tool logic. Same schemas, limits, read-only DB transaction, audit.
+- Installed FastMCP Version: FastMCP 4.2.5 (with `mcp 2.3.0`). Declared in `pyproject.toml` as `[project.optional-dependencies] mcp = ["fastmcp>=4.2.0"]` with lazy imports so CI remains lightweight.
+- Identity and role come strictly from authenticated JWT bearer token (`sub` claim), never from tool arguments. No `user_id` or account IDs in any exposed schema.
+- Role scopes map to tools:
+  - `finance:read`: `get_cash_flow`
+  - `protect:read`: `check_scam_message`, `get_verified_contacts`
+  - `borrow:read`: `get_borrow_readiness`
+  - `drafts:create`: `draft_complaint`
+  - `knowledge:read`: `search_knowledge`
+- Auth & Visibility Enforcement:
+  - `FloatJWTAuthProvider` implements `AuthProvider.verify_token` returning `AccessToken(subject=user_id, scopes=scopes)`.
+  - Tools use `@server.tool(name=..., auth=require_scopes(SCOPE_...))`. FastMCP automatically filters out unpermitted tools from `list_tools()` and rejects unpermitted tool calls with `AuthorizationError`.
+- Local use only: stdio transport or local HTTP on `127.0.0.1:8000/sse` with Bearer token header.
+  - Stdio run command: `python -m app.ai.mcp.server`
+  - Client connection: Connect using standard FastMCP Client or stdio transport passing bearer JWT.
+- Tool outputs are untrusted data. Read-only operation. Complaint drafts are created in `pending_confirmation` status; nothing is sent.
