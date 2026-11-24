@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -8,11 +9,18 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.admin.auth import AdminAuth
-from app.admin.views import ADMIN_ALLOWED_VIEWS, PROHIBITED_MODELS
+from app.admin.views import (
+    ADMIN_ALLOWED_VIEWS,
+    PROHIBITED_MODELS,
+    USER_ALLOWED_COLUMNS,
+    USER_SENSITIVE_FORBIDDEN_COLUMNS,
+)
 from app.core.config import Settings
 from app.db.session import get_async_session_factory
+from app.models.enums import ConsentType
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.protect import VerifiedContact
+from app.models.user import Consent, User
 
 
 class FloatAdmin(Admin):
@@ -25,6 +33,9 @@ class FloatAdmin(Admin):
         published_chunk_count: int = 0
         last_ingestion_time: str | None = None
         verified_contacts_count: int = 0
+        now = datetime.now(UTC)
+        cutoff_7d = now - timedelta(days=7)
+        cutoff_30d = now - timedelta(days=30)
 
         async with session_factory() as session:
             # 1. Documents by lifecycle status
@@ -57,6 +68,38 @@ class FloatAdmin(Admin):
             res_contacts = await session.execute(stmt_contacts)
             verified_contacts_count = res_contacts.scalar() or 0
 
+            # 5. User counts (strictly counts only, zero financial or conversation data)
+            total_users = (await session.execute(select(func.count(User.id)))).scalar() or 0
+            users_7d = (
+                await session.execute(select(func.count(User.id)).where(User.created_at >= cutoff_7d))
+            ).scalar() or 0
+            users_30d = (
+                await session.execute(select(func.count(User.id)).where(User.created_at >= cutoff_30d))
+            ).scalar() or 0
+            active_users = (
+                await session.execute(select(func.count(User.id)).where(User.is_active.is_(True)))
+            ).scalar() or 0
+            disabled_users = (
+                await session.execute(select(func.count(User.id)).where(User.is_active.is_(False)))
+            ).scalar() or 0
+            ai_consented_users = (
+                await session.execute(
+                    select(func.count(func.distinct(Consent.user_id))).where(
+                        Consent.consent_type == ConsentType.AI_DATA_PROCESSING,
+                        Consent.revoked_at.is_(None),
+                    )
+                )
+            ).scalar() or 0
+
+        user_metrics = {
+            "total_users": total_users,
+            "new_7d": users_7d,
+            "new_30d": users_30d,
+            "active": active_users,
+            "disabled": disabled_users,
+            "ai_consented": ai_consented_users,
+        }
+
         context = {
             "request": request,
             "title": self.title,
@@ -64,6 +107,7 @@ class FloatAdmin(Admin):
             "published_chunk_count": published_chunk_count,
             "last_ingestion_time": last_ingestion_time,
             "verified_contacts_count": verified_contacts_count,
+            "user_metrics": user_metrics,
         }
         return await self.templates.TemplateResponse(request, "sqladmin/index.html", context)
 
@@ -109,6 +153,26 @@ def setup_admin_panel(app: Any, settings: Settings, engine: Any = None) -> Float
                 f"Security violation: model '{model_name}' is sensitive consumer financial data and "
                 "is strictly prohibited from registration in the admin panel."
             )
+
+        # Enforce strict allowlist and read-only invariants for User view
+        if model_name == "User":
+            if getattr(view_cls, "can_create", True) or getattr(view_cls, "can_edit", True) or \
+               getattr(view_cls, "can_delete", True) or getattr(view_cls, "can_export", True):
+                raise RuntimeError("Security violation: UserAdmin must be strictly read-only with export disabled.")
+
+            for attr in ("column_list", "column_details_list"):
+                raw_cols = getattr(view_cls, attr, [])
+                for col in raw_cols:
+                    col_name = getattr(col, "name", str(col))
+                    if col_name in USER_SENSITIVE_FORBIDDEN_COLUMNS:
+                        raise RuntimeError(
+                            f"Security violation: Sensitive User column '{col_name}' rendered in {attr}."
+                        )
+                    if col_name not in USER_ALLOWED_COLUMNS:
+                        raise RuntimeError(
+                            f"Security violation: User column '{col_name}' in {attr} is not allowlisted."
+                        )
+
         admin.add_model_view(view_cls)
 
     return admin

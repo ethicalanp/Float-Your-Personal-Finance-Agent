@@ -1,8 +1,8 @@
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,20 +15,26 @@ from starlette.responses import RedirectResponse
 
 from app.admin.auth import AdminAuth
 from app.admin.create_admin import create_or_update_admin
-from app.admin.panel import setup_admin_panel
+from app.admin.panel import FloatAdmin, setup_admin_panel
 from app.admin.views import (
     ADMIN_ALLOWED_VIEWS,
     PROHIBITED_MODELS,
+    USER_ALLOWED_COLUMNS,
+    USER_SENSITIVE_FORBIDDEN_COLUMNS,
     KnowledgeChunkAdmin,
     KnowledgeDocumentAdmin,
+    UserAdmin,
     VerifiedContactAdmin,
+    mask_user_email,
 )
 from app.core.config import Settings
 from app.db.session import Base
 from app.main import create_app
-from app.models.knowledge import KnowledgeDocument
+from app.models.enums import ConsentType
+from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
+from app.models.plan import Account
 from app.models.protect import AuditTrail, VerifiedContact
-from app.models.user import User
+from app.models.user import Consent, User
 from tests.conftest import APP_TABLES
 
 
@@ -53,7 +59,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    tables = list(APP_TABLES) + [KnowledgeDocument.__table__]
+    tables = list(APP_TABLES) + [KnowledgeDocument.__table__, KnowledgeChunk.__table__]
     async with engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
 
@@ -168,7 +174,7 @@ async def test_admin_auth_login_and_rate_limit(db_session: AsyncSession) -> None
     assert await auth.authenticate(good_req) is False
 
 
-# 4. Sensitive Models Absent Guardrail
+# 4. Sensitive Models Absent & User Guardrail
 def test_sensitive_models_absent_from_admin_registry() -> None:
     for view_cls in ADMIN_ALLOWED_VIEWS:
         model_cls = getattr(view_cls, "model", None)
@@ -176,8 +182,8 @@ def test_sensitive_models_absent_from_admin_registry() -> None:
         model_name = getattr(model_cls, "__name__", "")
         assert model_name not in PROHIBITED_MODELS, f"Prohibited sensitive model {model_name} found in admin views!"
 
-    # Test that registering a prohibited model raises a security error
-    class IllegalUserView(ModelView, model=User):
+    # Test that registering a prohibited model (e.g. Account) raises a security error
+    class IllegalAccountView(ModelView, model=Account):
         pass
 
     mock_app = MagicMock()
@@ -188,10 +194,98 @@ def test_sensitive_models_absent_from_admin_registry() -> None:
         _env_file=None,
     )
 
-    from unittest.mock import patch
-    with patch("app.admin.panel.ADMIN_ALLOWED_VIEWS", [IllegalUserView]):
-        with pytest.raises(RuntimeError, match="Security violation: model 'User' is sensitive consumer financial data"):
+    with patch("app.admin.panel.ADMIN_ALLOWED_VIEWS", [IllegalAccountView]):
+        with pytest.raises(
+            RuntimeError,
+            match="Security violation: model 'Account' is sensitive consumer financial data",
+        ):
             setup_admin_panel(mock_app, mock_settings)
+
+    # Test that registering a User view with sensitive columns raises a security error
+    class LeakyUserView(ModelView, model=User):
+        can_create = False
+        can_edit = False
+        can_delete = False
+        can_export = False
+        column_list = [User.id, User.hashed_password]
+        column_details_list = [User.id, User.hashed_password]
+
+    with patch("app.admin.panel.ADMIN_ALLOWED_VIEWS", [LeakyUserView]):
+        with pytest.raises(RuntimeError, match="Security violation: Sensitive User column 'hashed_password' rendered"):
+            setup_admin_panel(mock_app, mock_settings)
+
+    # Test that registering a User view with write/export permissions raises a security error
+    class WritableUserView(ModelView, model=User):
+        can_create = True
+        can_edit = False
+        can_delete = False
+        can_export = False
+        column_list = [User.id, User.email]
+        column_details_list = [User.id, User.email]
+
+    with patch("app.admin.panel.ADMIN_ALLOWED_VIEWS", [WritableUserView]):
+        with pytest.raises(
+            RuntimeError,
+            match="Security violation: UserAdmin must be strictly read-only with export disabled",
+        ):
+            setup_admin_panel(mock_app, mock_settings)
+
+
+# 5. Read-only UserAdmin Allowlist & Invariants
+def test_user_admin_read_only_and_columns_allowlisted() -> None:
+    assert UserAdmin.can_create is False
+    assert UserAdmin.can_edit is False
+    assert UserAdmin.can_delete is False
+    assert UserAdmin.can_export is False
+
+    for attr in ("column_list", "column_details_list"):
+        cols = getattr(UserAdmin, attr, [])
+        for col in cols:
+            col_name = getattr(col, "name", str(col))
+            assert col_name in USER_ALLOWED_COLUMNS, f"Column '{col_name}' in {attr} is not in allowlist!"
+            assert col_name not in USER_SENSITIVE_FORBIDDEN_COLUMNS, f"Sensitive column '{col_name}' found in {attr}!"
+
+
+# 6. Email Masked in List and Detail
+def test_user_email_masked_in_list_and_detail() -> None:
+    assert mask_user_email("rahul.sharma@example.com") == "r***@example.com"
+    assert mask_user_email("priya@domain.in") == "p***@domain.in"
+    assert mask_user_email("a@float.in") == "a***@float.in"
+    assert mask_user_email(None) == "***"
+
+    mock_user = MagicMock(spec=User)
+    mock_user.email = "ananya.sen@example.com"
+
+    list_formatter = UserAdmin.column_formatters[User.email]
+    detail_formatter = UserAdmin.column_formatters_detail[User.email]
+
+    assert list_formatter(mock_user, "email") == "a***@example.com"
+    assert detail_formatter(mock_user, "email") == "a***@example.com"
+
+
+# 7. User Search is Exact-Match Only
+def test_user_search_exact_match_only() -> None:
+    view = UserAdmin()
+    user_id = uuid.uuid4()
+
+    # Exact email match statement
+    stmt = select(User)
+    stmt_exact_email = view.search_query(stmt, "user@example.com")
+    compiled_email = str(stmt_exact_email.compile(compile_kwargs={"literal_binds": True}))
+    assert "users.normalized_email = 'user@example.com'" in compiled_email
+    assert "LIKE" not in compiled_email
+    assert "ILIKE" not in compiled_email
+
+    # Substring search does NOT use LIKE
+    stmt_partial = view.search_query(stmt, "user")
+    compiled_partial = str(stmt_partial.compile(compile_kwargs={"literal_binds": True}))
+    assert "users.normalized_email = 'user'" in compiled_partial
+    assert "LIKE" not in compiled_partial
+
+    # Exact UUID match
+    stmt_uuid = view.search_query(stmt, str(user_id))
+    compiled_uuid = str(stmt_uuid.compile(compile_kwargs={"literal_binds": True}))
+    assert str(user_id) in compiled_uuid
 
 
 # 5. Embedding and content_tsv Never Rendered
@@ -205,12 +299,13 @@ def test_embedding_and_content_tsv_never_rendered() -> None:
     assert "content_tsv" not in chunk_detail_columns
 
 
-# 6. Verified Contact Format Validation & Audit Hooks
+# 8. Verified Contact Format Validation & Audit Hooks
 @pytest.mark.asyncio
 async def test_verified_contact_validation(db_session: AsyncSession) -> None:
     admin_view = VerifiedContactAdmin()
+    admin_id = str(uuid.uuid4())
     mock_req = MagicMock(spec=Request)
-    mock_req.session = {"admin_username": "compliance_admin"}
+    mock_req.session = {"admin_id": admin_id, "admin_username": "compliance_admin"}
 
     # Invalid phone format
     with pytest.raises(ValueError, match="Invalid phone format"):
@@ -253,7 +348,6 @@ async def test_verified_contact_validation(db_session: AsyncSession) -> None:
     db_session.add(contact)
     await db_session.commit()
 
-    from unittest.mock import patch
     with patch("app.admin.views.get_async_session_factory", return_value=MockAsyncSessionFactory(db_session)):
         await admin_view.after_model_change(data={}, model=contact, is_created=True, request=mock_req)
 
@@ -261,10 +355,11 @@ async def test_verified_contact_validation(db_session: AsyncSession) -> None:
     audit_entry = (await db_session.execute(stmt_audit)).scalars().first()
     assert audit_entry is not None
     assert audit_entry.action == "admin_create_verified_contact"
+    assert audit_entry.metadata_json["admin_id"] == admin_id
     assert audit_entry.metadata_json["admin_username"] == "compliance_admin"
 
 
-# 7. Knowledge Document Lifecycle Actions & State Transitions
+# 9. Knowledge Document Lifecycle Actions & State Transitions
 @pytest.mark.asyncio
 async def test_knowledge_document_lifecycle_actions(db_session: AsyncSession) -> None:
     doc = KnowledgeDocument(
@@ -282,11 +377,12 @@ async def test_knowledge_document_lifecycle_actions(db_session: AsyncSession) ->
     await db_session.commit()
 
     view = KnowledgeDocumentAdmin()
+    acting_admin_id = str(uuid.uuid4())
 
     # 1. Submit for review action
     req_review = MagicMock(spec=Request)
     session_data = {
-        "admin_id": str(uuid.uuid4()),
+        "admin_id": acting_admin_id,
         "admin_username": "editorial_admin",
         "login_time": datetime.now(UTC).timestamp(),
     }
@@ -296,7 +392,6 @@ async def test_knowledge_document_lifecycle_actions(db_session: AsyncSession) ->
     req_review.query_params = {"pks": str(doc.id)}
     req_review.headers = {"referer": "/admin/knowledge-document/list"}
 
-    from unittest.mock import patch
     with patch("app.admin.views.get_async_session_factory", return_value=MockAsyncSessionFactory(db_session)):
         resp = await view.submit_for_review(req_review)
         assert isinstance(resp, RedirectResponse)
@@ -313,6 +408,7 @@ async def test_knowledge_document_lifecycle_actions(db_session: AsyncSession) ->
     stmt = select(AuditTrail).where(AuditTrail.action == "admin_submit_review", AuditTrail.resource_id == str(doc.id))
     audit_review = (await db_session.execute(stmt)).scalars().first()
     assert audit_review is not None
+    assert audit_review.metadata_json["admin_id"] == acting_admin_id
     assert audit_review.metadata_json["new_status"] == "review"
 
     # 2. Archive action
@@ -326,4 +422,140 @@ async def test_knowledge_document_lifecycle_actions(db_session: AsyncSession) ->
     stmt_arch = select(AuditTrail).where(AuditTrail.action == "admin_archive", AuditTrail.resource_id == str(doc.id))
     audit_arch = (await db_session.execute(stmt_arch)).scalars().first()
     assert audit_arch is not None
+    assert audit_arch.metadata_json["admin_id"] == acting_admin_id
     assert audit_arch.metadata_json["new_status"] == "archived"
+
+
+# 10. Reveal Email Action & Audit Trail
+@pytest.mark.asyncio
+async def test_reveal_email_action_and_audit(db_session: AsyncSession) -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="shreya.mukherjee@example.com",
+        normalized_email="shreya.mukherjee@example.com",
+        hashed_password="dummyhashedpassword123",
+        full_name="Shreya Mukherjee",
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    view = UserAdmin()
+    acting_admin_id = str(uuid.uuid4())
+    req_reveal = MagicMock(spec=Request)
+    session_data = {
+        "admin_id": acting_admin_id,
+        "admin_username": "super_admin",
+        "login_time": datetime.now(UTC).timestamp(),
+    }
+    req_reveal.session = session_data
+    req_reveal.scope = {"session": session_data, "type": "http"}
+    req_reveal.state = MagicMock()
+    req_reveal.query_params = {"pks": str(user.id)}
+    req_reveal.url_for = lambda name, **kwargs: f"/admin/user/details/{user.id}"
+
+    mock_templates = MagicMock()
+
+    async def mock_template_response(request: Request, name: str, context: dict[str, Any]) -> Any:
+        return context
+
+    mock_templates.TemplateResponse = mock_template_response
+    view.templates = mock_templates
+
+    with patch("app.admin.views.get_async_session_factory", return_value=MockAsyncSessionFactory(db_session)):
+        context = await view.reveal_email(req_reveal)
+        assert context["email"] == "shreya.mukherjee@example.com"
+        assert context["user_id"] == str(user.id)
+
+    # Verify audit record
+    stmt = select(AuditTrail).where(AuditTrail.action == "admin_reveal_email", AuditTrail.resource_id == str(user.id))
+    audit_entry = (await db_session.execute(stmt)).scalars().first()
+    assert audit_entry is not None
+    assert audit_entry.metadata_json["admin_id"] == acting_admin_id
+    assert audit_entry.metadata_json["admin_username"] == "super_admin"
+    # Never log the unmasked email in audit metadata
+    assert "email" not in audit_entry.metadata_json
+    assert "shreya" not in str(audit_entry.metadata_json)
+
+
+# 11. Dashboard User Counts Analytics
+@pytest.mark.asyncio
+async def test_dashboard_user_counts(db_session: AsyncSession) -> None:
+    now = datetime.now(UTC)
+
+    # User 1: Created 2 days ago, active, active AI consent
+    u1 = User(
+        id=uuid.uuid4(),
+        email="user1@example.com",
+        normalized_email="user1@example.com",
+        hashed_password="pw1",
+        full_name="User One",
+        is_active=True,
+        created_at=now - timedelta(days=2),
+    )
+    c1 = Consent(
+        id=uuid.uuid4(),
+        user_id=u1.id,
+        consent_type=ConsentType.AI_DATA_PROCESSING,
+        consent_version="v1.0",
+        granted_at=now - timedelta(days=2),
+        revoked_at=None,
+    )
+
+    # User 2: Created 15 days ago, disabled, revoked AI consent
+    u2 = User(
+        id=uuid.uuid4(),
+        email="user2@example.com",
+        normalized_email="user2@example.com",
+        hashed_password="pw2",
+        full_name="User Two",
+        is_active=False,
+        created_at=now - timedelta(days=15),
+    )
+    c2 = Consent(
+        id=uuid.uuid4(),
+        user_id=u2.id,
+        consent_type=ConsentType.AI_DATA_PROCESSING,
+        consent_version="v1.0",
+        granted_at=now - timedelta(days=15),
+        revoked_at=now - timedelta(days=5),
+    )
+
+    # User 3: Created 45 days ago, active, no AI consent
+    u3 = User(
+        id=uuid.uuid4(),
+        email="user3@example.com",
+        normalized_email="user3@example.com",
+        hashed_password="pw3",
+        full_name="User Three",
+        is_active=True,
+        created_at=now - timedelta(days=45),
+    )
+
+    db_session.add_all([u1, c1, u2, c2, u3])
+    await db_session.commit()
+
+    admin_panel = FloatAdmin(
+        app=MagicMock(),
+        engine=MagicMock(),
+        base_url="/admin",
+        templates_dir="templates",
+    )
+    admin_panel.templates = MagicMock()
+
+    async def mock_template_resp(request: Request, name: str, context: dict[str, Any]) -> Any:
+        return context
+
+    admin_panel.templates.TemplateResponse = mock_template_resp
+
+    req = MagicMock(spec=Request)
+    with patch("app.admin.panel.get_async_session_factory", return_value=MockAsyncSessionFactory(db_session)):
+        context = await admin_panel.index(req)
+        metrics = context["user_metrics"]
+
+        assert metrics["total_users"] == 3
+        assert metrics["new_7d"] == 1
+        assert metrics["new_30d"] == 2
+        assert metrics["active"] == 2
+        assert metrics["disabled"] == 1
+        assert metrics["ai_consented"] == 1

@@ -12,6 +12,144 @@ from app.ai.rag.repository import DocumentApprovalRefusedError, KnowledgeReposit
 from app.db.session import get_async_session_factory
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.protect import AuditTrail, VerifiedContact
+from app.models.user import Consent, User
+
+
+def mask_user_email(email: str | None) -> str:
+    """Mask email address as a***@domain for privacy by default."""
+    if not email or "@" not in email:
+        return "***"
+    parts = email.split("@", 1)
+    name, domain = parts[0], parts[1]
+    masked_name = (name[0] + "***") if len(name) > 0 else "***"
+    return f"{masked_name}@{domain}"
+
+
+class UserAdmin(ModelView, model=User):
+    name = "User"
+    name_plural = "Users"
+    icon = "fa-solid fa-users"
+
+    # Strictly read-only per requirements: no create, edit, delete, export
+    can_create = False
+    can_edit = False
+    can_delete = False
+    can_export = False
+
+    page_size = 20
+    page_size_options = [10, 20, 50, 100]
+
+    column_default_sort = [(User.created_at, True)]
+
+    # Explicit column allowlist: short id, email, created_at, last_login_at, status, ai_data_processing consent
+    column_list = [
+        User.id,
+        User.email,
+        User.created_at,
+        "last_login_at",
+        User.is_active,
+        "ai_data_processing_consent",
+    ]
+
+    column_details_list = [
+        User.id,
+        User.email,
+        User.created_at,
+        "last_login_at",
+        User.is_active,
+        "ai_data_processing_consent",
+    ]
+
+    column_labels = {
+        User.id: "Short ID",
+        User.email: "Email",
+        User.created_at: "Created At",
+        "last_login_at": "Last Login At",
+        User.is_active: "Status",
+        "ai_data_processing_consent": "AI Data Processing Consent",
+    }
+
+    column_formatters = {
+        User.id: lambda m, a: str(m.id)[:8],
+        User.email: lambda m, a: mask_user_email(m.email),
+        User.is_active: lambda m, a: "active" if m.is_active else "disabled",
+        "last_login_at": lambda m, a: "N/A",
+    }
+
+    column_formatters_detail = {
+        User.id: lambda m, a: str(m.id)[:8],
+        User.email: lambda m, a: mask_user_email(m.email),
+        User.is_active: lambda m, a: "active" if m.is_active else "disabled",
+        "last_login_at": lambda m, a: "N/A",
+    }
+
+    column_filters = [
+        User.is_active,
+        User.created_at,
+        Consent.consent_type,
+    ]
+
+    def search_query(self, stmt: Any, term: str) -> Any:
+        """Search by exact email or exact id only."""
+        from sqlalchemy import false, or_
+
+        term = term.strip()
+        expressions = []
+        expressions.append(User.normalized_email == term.lower())
+        try:
+            val_uuid = uuid.UUID(term)
+            expressions.append(User.id == val_uuid)
+        except ValueError:
+            pass
+        return stmt.filter(or_(false(), *expressions))
+
+    @action(
+        name="reveal_email",
+        label="Reveal Email",
+        confirmation_message="Reveal unmasked email address for this user? This access will be permanently audited.",
+        add_in_detail=True,
+        add_in_list=False,
+    )
+    async def reveal_email(self, request: Request) -> Response:
+        pks = request.query_params.get("pks", "").split(",")
+        admin_id = request.session.get("admin_id")
+        admin_username = request.session.get("admin_username", "admin")
+        session_factory = get_async_session_factory()
+
+        if not pks or not pks[0].strip():
+            return RedirectResponse(request.url_for("admin:list", identity=self.identity), status_code=303)
+
+        try:
+            user_id = uuid.UUID(pks[0].strip())
+        except ValueError:
+            return RedirectResponse(request.url_for("admin:list", identity=self.identity), status_code=303)
+
+        async with session_factory() as session:
+            user = await session.get(User, user_id)
+            if not user:
+                return RedirectResponse(request.url_for("admin:list", identity=self.identity), status_code=303)
+
+            await record_admin_audit(
+                session=session,
+                admin_id=admin_id,
+                admin_username=admin_username,
+                action="admin_reveal_email",
+                resource_type="users",
+                resource_id=str(user.id),
+                user_id=user.id,
+                metadata={},  # never the email
+            )
+            await session.commit()
+            revealed_email = user.email
+
+        context = {
+            "request": request,
+            "title": "Revealed User Email",
+            "user_id": str(user_id),
+            "email": revealed_email,
+            "back_url": str(request.url_for("admin:details", identity=self.identity, pk=str(user_id))),
+        }
+        return await self.templates.TemplateResponse(request, "sqladmin/reveal_email.html", context)
 
 
 class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
@@ -87,6 +225,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
     )
     async def submit_for_review(self, request: Request) -> Response:
         pks = request.query_params.get("pks", "").split(",")
+        admin_id = request.session.get("admin_id")
         admin_username = request.session.get("admin_username", "admin")
         session_factory = get_async_session_factory()
 
@@ -103,6 +242,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
                 doc.status = "review"
                 await record_admin_audit(
                     session=session,
+                    admin_id=admin_id,
                     admin_username=admin_username,
                     action="admin_submit_review",
                     resource_type="knowledge_documents",
@@ -123,6 +263,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
     )
     async def publish_document(self, request: Request) -> Response:
         pks = request.query_params.get("pks", "").split(",")
+        admin_id = request.session.get("admin_id")
         admin_username = request.session.get("admin_username", "admin")
         session_factory = get_async_session_factory()
         embedder = get_embedder()
@@ -137,6 +278,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
                     await repo.approve_document(doc_id=doc_id, reviewer=admin_username, embedder=embedder)
                     await record_admin_audit(
                         session=session,
+                        admin_id=admin_id,
                         admin_username=admin_username,
                         action="admin_publish",
                         resource_type="knowledge_documents",
@@ -147,6 +289,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
                     # Refusal due to state or licensing invariants
                     await record_admin_audit(
                         session=session,
+                        admin_id=admin_id,
                         admin_username=admin_username,
                         action="admin_publish_refused",
                         resource_type="knowledge_documents",
@@ -167,6 +310,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
     )
     async def archive_document(self, request: Request) -> Response:
         pks = request.query_params.get("pks", "").split(",")
+        admin_id = request.session.get("admin_id")
         admin_username = request.session.get("admin_username", "admin")
         session_factory = get_async_session_factory()
 
@@ -179,6 +323,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
                 await repo.archive_document(doc_id)
                 await record_admin_audit(
                     session=session,
+                    admin_id=admin_id,
                     admin_username=admin_username,
                     action="admin_archive",
                     resource_type="knowledge_documents",
@@ -199,6 +344,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
     )
     async def supersede_document(self, request: Request) -> Response:
         pks = request.query_params.get("pks", "").split(",")
+        admin_id = request.session.get("admin_id")
         admin_username = request.session.get("admin_username", "admin")
         session_factory = get_async_session_factory()
 
@@ -212,6 +358,7 @@ class KnowledgeDocumentAdmin(ModelView, model=KnowledgeDocument):
                     doc.status = "superseded"
                     await record_admin_audit(
                         session=session,
+                        admin_id=admin_id,
                         admin_username=admin_username,
                         action="admin_supersede",
                         resource_type="knowledge_documents",
@@ -311,12 +458,14 @@ class VerifiedContactAdmin(ModelView, model=VerifiedContact):
     async def after_model_change(
         self, data: dict[str, Any], model: Any, is_created: bool, request: Request
     ) -> Response | None:
+        admin_id = request.session.get("admin_id")
         admin_username = request.session.get("admin_username", "admin")
         action_name = "admin_create_verified_contact" if is_created else "admin_edit_verified_contact"
         session_factory = get_async_session_factory()
         async with session_factory() as session:
             await record_admin_audit(
                 session=session,
+                admin_id=admin_id,
                 admin_username=admin_username,
                 action=action_name,
                 resource_type="verified_contacts",
@@ -327,11 +476,13 @@ class VerifiedContactAdmin(ModelView, model=VerifiedContact):
         return None
 
     async def after_model_delete(self, model: Any, request: Request) -> None:
+        admin_id = request.session.get("admin_id")
         admin_username = request.session.get("admin_username", "admin")
         session_factory = get_async_session_factory()
         async with session_factory() as session:
             await record_admin_audit(
                 session=session,
+                admin_id=admin_id,
                 admin_username=admin_username,
                 action="admin_delete_verified_contact",
                 resource_type="verified_contacts",
@@ -350,6 +501,7 @@ class AuditTrailAdmin(ModelView, model=AuditTrail):
     can_create = False
     can_edit = False
     can_delete = False
+    can_export = False
 
     column_list = [
         AuditTrail.id,
@@ -385,8 +537,17 @@ class AuditTrailAdmin(ModelView, model=AuditTrail):
 
     column_default_sort = ("created_at", True)
 
+    column_formatters = {
+        AuditTrail.actor: lambda m, a: (
+            f"admin:{m.metadata_json['admin_id'][:8]}"
+            if m.metadata_json and m.metadata_json.get("admin_id") and m.metadata_json.get("admin_id") != "unknown"
+            else m.actor.value
+        ),
+    }
+
 
 ADMIN_ALLOWED_VIEWS = [
+    UserAdmin,
     KnowledgeDocumentAdmin,
     KnowledgeChunkAdmin,
     VerifiedContactAdmin,
@@ -395,7 +556,6 @@ ADMIN_ALLOWED_VIEWS = [
 
 # Sensitive model classes prohibited from ever appearing in the admin panel
 PROHIBITED_MODELS = {
-    "User",
     "Consent",
     "Account",
     "Transaction",
@@ -406,4 +566,29 @@ PROHIBITED_MODELS = {
     "RecurringCommitment",
     "RecurringOccurrence",
     "RecurringNotification",
+}
+
+# Strict column allowlist for User view
+USER_ALLOWED_COLUMNS = {
+    "id",
+    "email",
+    "created_at",
+    "last_login_at",
+    "is_active",
+    "status",
+    "ai_data_processing",
+    "ai_data_processing_consent",
+}
+
+USER_SENSITIVE_FORBIDDEN_COLUMNS = {
+    "hashed_password",
+    "password",
+    "normalized_email",
+    "full_name",
+    "token",
+    "tokens",
+    "phone",
+    "dob",
+    "pan",
+    "aadhaar",
 }
