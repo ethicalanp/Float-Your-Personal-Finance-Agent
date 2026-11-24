@@ -262,6 +262,11 @@ def test_user_email_masked_in_list_and_detail() -> None:
     assert list_formatter(mock_user, "email") == "a***@example.com"
     assert detail_formatter(mock_user, "email") == "a***@example.com"
 
+    login_list_formatter = UserAdmin.column_formatters["last_login_at"]
+    login_detail_formatter = UserAdmin.column_formatters_detail["last_login_at"]
+    assert login_list_formatter(mock_user, "last_login_at") == "Not tracked yet"
+    assert login_detail_formatter(mock_user, "last_login_at") == "Not tracked yet"
+
 
 # 7. User Search is Exact-Match Only
 def test_user_search_exact_match_only() -> None:

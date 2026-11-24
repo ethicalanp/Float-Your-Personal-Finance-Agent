@@ -73,14 +73,14 @@ class UserAdmin(ModelView, model=User):
         User.id: lambda m, a: str(m.id)[:8],
         User.email: lambda m, a: mask_user_email(m.email),
         User.is_active: lambda m, a: "active" if m.is_active else "disabled",
-        "last_login_at": lambda m, a: "N/A",
+        "last_login_at": lambda m, a: "Not tracked yet",
     }
 
     column_formatters_detail = {
         User.id: lambda m, a: str(m.id)[:8],
         User.email: lambda m, a: mask_user_email(m.email),
         User.is_active: lambda m, a: "active" if m.is_active else "disabled",
-        "last_login_at": lambda m, a: "N/A",
+        "last_login_at": lambda m, a: "Not tracked yet",
     }
 
     column_filters = [
