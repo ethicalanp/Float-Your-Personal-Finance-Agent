@@ -1,4 +1,5 @@
 from app.db.session import Base
+from app.models.admin import AdminUser
 from app.models.borrow import BorrowAssessment
 from app.models.conversations import Conversation, Message
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
@@ -19,6 +20,7 @@ from app.models.user import Consent, User
 
 __all__ = [
     "Account",
+    "AdminUser",
     "AuditTrail",
     "Base",
     "BorrowAssessment",
