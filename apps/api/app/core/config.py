@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # Admin Panel (SQLAdmin) configuration
     admin_enabled: bool = False
-    admin_allowed_ips: str = "127.0.0.1,::1,testclient"
+    admin_allowed_ips: str = "127.0.0.1,::1"
     admin_session_secret_key: SecretStr | None = None
     admin_session_expire_seconds: int = 1800  # 30 minutes default
 
