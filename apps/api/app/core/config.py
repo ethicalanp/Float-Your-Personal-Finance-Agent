@@ -1,7 +1,7 @@
 from functools import lru_cache
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
-from pydantic import SecretStr, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_DEV_JWT_SECRET = "dev-insecure-secret-key-change-in-production-min32bytes"
@@ -44,6 +44,17 @@ class Settings(BaseSettings):
     admin_allowed_ips: str = "127.0.0.1,::1"
     admin_session_secret_key: SecretStr | None = None
     admin_session_expire_seconds: int = 1800  # 30 minutes default
+
+    @field_validator("admin_enabled", "debug", "enable_synthetic_ml_demos", mode="before")
+    @classmethod
+    def _strip_bool_strings(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip().lower()
+            if v_clean in ("true", "1", "yes", "t", "on"):
+                return True
+            if v_clean in ("false", "0", "no", "f", "off", ""):
+                return False
+        return v
 
     @property
     def docs_enabled(self) -> bool:
