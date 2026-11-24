@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     synthetic_borrow_demo_model_path: str | None = None
     synthetic_scam_demo_model_path: str | None = None
 
+    # Admin Panel (SQLAdmin) configuration
+    admin_enabled: bool = False
+    admin_allowed_ips: str = "127.0.0.1,::1,testclient"
+    admin_session_secret_key: SecretStr | None = None
+    admin_session_expire_seconds: int = 1800  # 30 minutes default
+
     @property
     def docs_enabled(self) -> bool:
         """Interactive API docs are switched off in production."""

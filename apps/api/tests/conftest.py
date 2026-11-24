@@ -1,4 +1,7 @@
+import os
 from collections.abc import AsyncGenerator
+
+os.environ["PFA_APP_ENV"] = "test"
 
 import pytest
 from fastapi import FastAPI
@@ -9,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import Settings
 from app.db.session import Base, get_db
 from app.main import create_app
+from app.models.admin import AdminUser
 from app.models.borrow import BorrowAssessment
 from app.models.conversations import Conversation, Message
 from app.models.plan import Account, Transaction, TransactionImport
@@ -41,6 +45,7 @@ APP_TABLES = [
     RecurringOccurrence.__table__,
     RecurringNotification.__table__,
     BorrowAssessment.__table__,
+    AdminUser.__table__,
     Conversation.__table__,
     Message.__table__,
 ]

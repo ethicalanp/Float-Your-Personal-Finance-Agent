@@ -1,0 +1,117 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="col-12">
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h3 class="card-title m-0">Operational Dashboard</h3>
+      <span class="badge bg-blue text-white">Internal Operations</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">
+        System overview of regulatory knowledge base, ingestion lifecycles, and operational metadata. No consumer financial records are accessible here.
+      </p>
+
+      <div class="row row-cards mb-4">
+        <!-- Published Chunks -->
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-auto">
+                  <span class="bg-green text-white avatar">
+                    <i class="fa-solid fa-cubes"></i>
+                  </span>
+                </div>
+                <div class="col">
+                  <div class="font-weight-medium">Published Chunks</div>
+                  <div class="text-muted fs-3 font-weight-bold">{{ published_chunk_count }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Last Ingestion Time -->
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-auto">
+                  <span class="bg-purple text-white avatar">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                  </span>
+                </div>
+                <div class="col">
+                  <div class="font-weight-medium">Last Ingestion Time</div>
+                  <div class="text-muted">{{ last_ingestion_time or 'No records ingested' }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Total Verified Contacts -->
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-auto">
+                  <span class="bg-cyan text-white avatar">
+                    <i class="fa-solid fa-phone-shield"></i>
+                  </span>
+                </div>
+                <div class="col">
+                  <div class="font-weight-medium">Verified Contacts</div>
+                  <div class="text-muted fs-3 font-weight-bold">{{ verified_contacts_count }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Knowledge Documents Lifecycle Breakdown -->
+      <h4 class="mb-3">Knowledge Documents Lifecycle</h4>
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table table-striped">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Document Count</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge bg-secondary text-white">draft</span></td>
+              <td><strong>{{ doc_status_counts.get('draft', 0) }}</strong></td>
+              <td>New or freshly imported documents pending chunking and verification.</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-warning text-white">review</span></td>
+              <td><strong>{{ doc_status_counts.get('review', 0) }}</strong></td>
+              <td>Chunked and smoke-tested; pending admin approval.</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-success text-white">published</span></td>
+              <td><strong>{{ doc_status_counts.get('published', 0) }}</strong></td>
+              <td>Active in vector search and cited by the assistant.</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-info text-white">superseded</span></td>
+              <td><strong>{{ doc_status_counts.get('superseded', 0) }}</strong></td>
+              <td>Replaced by a newer version of the same regulatory publication.</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-dark text-white">archived</span></td>
+              <td><strong>{{ doc_status_counts.get('archived', 0) }}</strong></td>
+              <td>Historical documents retired from active retrieval.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

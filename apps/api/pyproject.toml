@@ -21,6 +21,9 @@ dependencies = [
     "pandas>=2.2.0",
     "shap>=0.46.0",
     "aiosqlite>=0.20.0",
+    "sqladmin>=0.20.1",
+    "itsdangerous>=2.2.0",
+    "wtforms>=3.1.0",
 ]
 
 [project.optional-dependencies]
