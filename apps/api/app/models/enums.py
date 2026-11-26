@@ -5,7 +5,39 @@ from sqlalchemy import Enum as SqlEnum
 
 class ConsentType(str, Enum):
     TERMS = "terms"
+    PRIVACY = "privacy"
     AI_DATA_PROCESSING = "ai_data_processing"
+
+
+class AuthProvider(str, Enum):
+    PASSWORD = "password"
+    GOOGLE = "google"
+    PHONE = "phone"
+
+
+class AuthTokenType(str, Enum):
+    OTP = "otp"
+    EMAIL_VERIFICATION = "email_verification"
+    PASSWORD_RESET = "password_reset"
+
+
+class AuthAuditEventType(str, Enum):
+    REGISTER = "register"
+    LOGIN_SUCCESS = "login_success"
+    LOGIN_FAILURE = "login_failure"
+    OTP_REQUEST = "otp_request"
+    OTP_VERIFY_SUCCESS = "otp_verify_success"
+    OTP_VERIFY_FAILURE = "otp_verify_failure"
+    PASSWORD_RESET_REQUEST = "password_reset_request"
+    PASSWORD_RESET_SUCCESS = "password_reset_success"
+    EMAIL_VERIFY_REQUEST = "email_verify_request"
+    EMAIL_VERIFY_SUCCESS = "email_verify_success"
+    REFRESH_SUCCESS = "refresh_success"
+    REFRESH_REUSE_DETECTED = "refresh_reuse_detected"
+    LOGOUT = "logout"
+    LOGOUT_ALL = "logout_all"
+    IDENTITY_LINKED = "identity_linked"
+    IDENTITY_UNLINKED = "identity_unlinked"
 
 
 class AccountType(str, Enum):

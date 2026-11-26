@@ -12,7 +12,11 @@ from app import __version__
 from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import AppException, format_error_response
-from app.core.middleware import RequestContextMiddleware, setup_json_logging
+from app.core.middleware import (
+    RequestContextMiddleware,
+    StatementUploadLimitMiddleware,
+    setup_json_logging,
+)
 
 
 @asynccontextmanager
@@ -60,7 +64,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.state.settings = settings
 
-    # Mount Request ID and Structured Access Logging Middleware
+    # Mount Statement Upload Limit and Request Context Middlewares
+    application.add_middleware(StatementUploadLimitMiddleware)
     application.add_middleware(RequestContextMiddleware)
 
     # Global Exception Handlers for Unified Error Format
@@ -120,6 +125,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     application.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    from app.api.v1.auth import get_auth_capabilities
+    from app.api.v1.health import readiness_check
+
+    application.add_api_route("/ready", readiness_check, methods=["GET"], tags=["Health"])
+    application.add_api_route(
+        "/auth/capabilities",
+        get_auth_capabilities,
+        methods=["GET"],
+        tags=["Authentication & Consent"],
+    )
+
     return application
 
 

@@ -2,9 +2,22 @@ import hashlib
 import hmac
 import json
 import math
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+if sys.platform == "win32":
+    import os
+
+    try:
+        import sklearn
+
+        sklearn_libs = Path(sklearn.__file__).resolve().parent / ".libs"
+        if sklearn_libs.is_dir():
+            os.add_dll_directory(str(sklearn_libs))
+    except Exception:
+        pass
 
 import numpy as np
 
@@ -42,22 +55,23 @@ def _load_model(model_dir: str) -> tuple[Any, dict[str, Any], Any]:
     try:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"Unable to read borrow model metadata from {metadata_path}") from exc
+        raise ServiceUnavailableException(f"Unable to read borrow model metadata from {metadata_path}") from exc
 
-    if metadata.get("model_format_version") != MODEL_FORMAT_VERSION:
-        raise RuntimeError("The configured borrow model artifact format is unsupported.")
+    format_version = metadata.get("model_format_version") or metadata.get("artifact_format_version")
+    if format_version != MODEL_FORMAT_VERSION:
+        raise ServiceUnavailableException("The configured borrow model artifact format is unsupported.")
     if metadata.get("feature_version") != FEATURE_VERSION:
-        raise RuntimeError(
+        raise ServiceUnavailableException(
             f"Borrow model feature version {metadata.get('feature_version')!r} "
             f"does not match API feature version {FEATURE_VERSION!r}."
         )
     if metadata.get("feature_columns") != list(FEATURE_COLUMNS):
-        raise RuntimeError("Borrow model feature columns do not match the API feature contract.")
+        raise ServiceUnavailableException("Borrow model feature columns do not match the API feature contract.")
 
     expected_hash = metadata.get("model_sha256")
     actual_hash = hashlib.sha256(model_path.read_bytes()).hexdigest()
     if not expected_hash or not hmac.compare_digest(expected_hash, actual_hash):
-        raise RuntimeError("Borrow model artifact checksum validation failed.")
+        raise ServiceUnavailableException("Borrow model artifact checksum validation failed.")
 
     try:
         import lightgbm as lgb
@@ -67,8 +81,16 @@ def _load_model(model_dir: str) -> tuple[Any, dict[str, Any], Any]:
         ) from exc
 
     booster = lgb.Booster(model_file=str(model_path))
-    if booster.feature_name() != list(FEATURE_COLUMNS):
-        raise RuntimeError("Loaded LightGBM feature names do not match the API feature contract.")
+    if booster.num_feature() != len(FEATURE_COLUMNS):
+        raise RuntimeError("Loaded LightGBM feature count does not match the API feature contract.")
+    try:
+        f_names = booster.feature_name()
+        if f_names and f_names != list(FEATURE_COLUMNS):
+            if not all(name.startswith("Column_") for name in f_names):
+                raise RuntimeError("Loaded LightGBM feature names do not match the API feature contract.")
+    except (OSError, RuntimeError) as exc:
+        if isinstance(exc, RuntimeError) and "contract" in str(exc):
+            raise
 
     try:
         import shap

@@ -21,6 +21,9 @@ dependencies = [
     "pandas>=2.2.0",
     "shap>=0.46.0",
     "aiosqlite>=0.20.0",
+    "sqladmin>=0.20.1",
+    "itsdangerous>=2.2.0",
+    "wtforms>=3.1.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +32,8 @@ dev = [
     "mypy==2.4.1",
     "pytest==9.2.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-timeout>=2.3.1",
     "ruff==0.17.5",
 ]
 training = [
@@ -37,14 +42,24 @@ training = [
 mcp = [
     "fastmcp>=4.2.0",
 ]
+evals = [
+    "matplotlib>=3.9.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+timeout = 30
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "slow: marks tests as slow",
+    "real_embedder: marks tests requiring the real e5 embedding model (excluded from default CI)",
+    "live: marks tests calling live external services",
+]
+addopts = "-m 'not real_embedder and not slow and not live'"
 
 [tool.ruff]
 line-length = 120

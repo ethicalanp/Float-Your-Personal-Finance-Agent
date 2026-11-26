@@ -15,11 +15,20 @@ from app.models.recurring import (
     RecurringNotification,
     RecurringOccurrence,
 )
-from app.models.user import Consent, User
+from app.models.user import (
+    AuthAuditLog,
+    AuthToken,
+    Consent,
+    User,
+    UserIdentity,
+    UserSession,
+)
 
 __all__ = [
     "Account",
     "AuditTrail",
+    "AuthAuditLog",
+    "AuthToken",
     "Base",
     "BorrowAssessment",
     "Consent",
@@ -36,5 +45,7 @@ __all__ = [
     "Transaction",
     "TransactionImport",
     "User",
+    "UserIdentity",
+    "UserSession",
     "VerifiedContact",
 ]

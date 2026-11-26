@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, require_consent
-from app.core.errors import BadRequestException, NotFoundException
+from app.core.errors import BadRequestException, NotFoundException, PayloadTooLargeException
 from app.models.enums import (
     AccountStatus,
     AccountType,
@@ -131,7 +131,11 @@ async def list_accounts(
     ]
 
 
-@router.post("/upload-statement", response_model=StatementUploadSummary)
+@router.post(
+    "/upload-statement",
+    response_model=StatementUploadSummary,
+    responses={413: {"description": "Statement content exceeds maximum allowed size of 10 MB."}},
+)
 async def upload_statement(
     req: UploadStatementRequest,
     current_user: User = Depends(require_consent(ConsentType.TERMS)),
@@ -149,6 +153,9 @@ async def upload_statement(
 
     if not account:
         raise NotFoundException("Specified account does not exist or does not belong to you.")
+
+    if len(req.content.encode("utf-8")) > 10 * 1024 * 1024:
+        raise PayloadTooLargeException("Statement content exceeds maximum allowed size of 10 MB.")
 
     is_sms = req.format.lower() == "sms"
     if is_sms:

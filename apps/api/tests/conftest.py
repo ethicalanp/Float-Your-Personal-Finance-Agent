@@ -1,4 +1,7 @@
-from collections.abc import AsyncGenerator
+import os
+from collections.abc import AsyncGenerator, Generator
+
+os.environ["PFA_APP_ENV"] = "test"
 
 import pytest
 from fastapi import FastAPI
@@ -6,11 +9,19 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.ai.agent.dependencies import set_orchestrator
+from app.ai.gateway.adapters.fake import FakeProvider
+from app.ai.gateway.config import LLMConfig
+from app.ai.gateway.dependencies import set_llm_gateway
+from app.ai.gateway.manager import LLMGateway
+from app.ai.rag.dependencies import set_embedder
+from app.ai.rag.embedder.fake import FakeEmbedder
 from app.core.config import Settings
 from app.db.session import Base, get_db
 from app.main import create_app
 from app.models.borrow import BorrowAssessment
 from app.models.conversations import Conversation, Message
+from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import (
     AuditTrail,
@@ -24,11 +35,22 @@ from app.models.recurring import (
     RecurringNotification,
     RecurringOccurrence,
 )
-from app.models.user import Consent, User
+from app.models.user import (
+    AuthAuditLog,
+    AuthToken,
+    Consent,
+    User,
+    UserIdentity,
+    UserSession,
+)
 
 APP_TABLES = [
     User.__table__,
     Consent.__table__,
+    UserIdentity.__table__,
+    UserSession.__table__,
+    AuthToken.__table__,
+    AuthAuditLog.__table__,
     Account.__table__,
     TransactionImport.__table__,
     Transaction.__table__,
@@ -43,6 +65,8 @@ APP_TABLES = [
     BorrowAssessment.__table__,
     Conversation.__table__,
     Message.__table__,
+    KnowledgeDocument.__table__,
+    KnowledgeChunk.__table__,
 ]
 
 
@@ -91,3 +115,41 @@ def app(settings: Settings) -> FastAPI:
 @pytest.fixture
 def client(app: FastAPI) -> TestClient:
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def force_test_environment_and_fake_ai(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+    """Force fake provider, fake embedder, and test environment for all tests unless explicitly marked."""
+    is_real = (
+        request.node.get_closest_marker("real_embedder") is not None
+        or request.node.get_closest_marker("live") is not None
+    )
+    old_env = os.environ.get("PFA_APP_ENV")
+    os.environ["PFA_APP_ENV"] = "test"
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    if not is_real:
+        fake_embedder = FakeEmbedder()
+        set_embedder(fake_embedder)
+
+        fake_provider = FakeProvider()
+        config = LLMConfig(provider="fake", approved_for_real_data=True)
+        fake_gateway = LLMGateway(config=config, adapter=fake_provider)
+        set_llm_gateway(fake_gateway)
+        set_orchestrator(None)
+
+    yield
+
+    if not is_real:
+        set_embedder(None)
+        set_llm_gateway(None)
+        set_orchestrator(None)
+
+    if old_env is not None:
+        os.environ["PFA_APP_ENV"] = old_env
+    else:
+        os.environ.pop("PFA_APP_ENV", None)
+    get_settings.cache_clear()
+

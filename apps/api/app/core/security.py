@@ -1,4 +1,5 @@
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -113,15 +114,18 @@ def decode_access_token(token: str) -> dict[str, Any]:
         hashlib.sha256,
     ).digest()
 
-    actual_signature = _b64url_decode(encoded_signature)
-    if not hmac.compare_digest(actual_signature, expected_signature):
-        raise UnauthorizedException("Token signature verification failed")
+    try:
+        actual_signature = _b64url_decode(encoded_signature)
+        if not hmac.compare_digest(actual_signature, expected_signature):
+            raise UnauthorizedException("Token signature verification failed")
 
-    payload_bytes = _b64url_decode(encoded_payload)
-    decoded_payload: object = json.loads(payload_bytes.decode("utf-8"))
-    if not isinstance(decoded_payload, dict):
-        raise UnauthorizedException("Invalid token payload")
-    payload: dict[str, Any] = decoded_payload
+        payload_bytes = _b64url_decode(encoded_payload)
+        decoded_payload: object = json.loads(payload_bytes.decode("utf-8"))
+        if not isinstance(decoded_payload, dict):
+            raise UnauthorizedException("Invalid token payload")
+        payload: dict[str, Any] = decoded_payload
+    except (binascii.Error, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        raise UnauthorizedException("Invalid token format") from None
 
     now = int(time.time())
     if payload.get("exp") and now > payload["exp"]:
@@ -136,6 +140,8 @@ class CurrentUser(BaseModel):
     full_name: str
     role: str = "user"
     consent_given: bool = False
+    session_id: str | None = None
+    auth_time: int | None = None
 
 
 async def get_current_user(
@@ -151,10 +157,16 @@ async def get_current_user(
     if not sub:
         raise UnauthorizedException("Invalid token payload")
 
+    auth_time = payload.get("auth_time")
+    if auth_time is None:
+        auth_time = payload.get("iat")
+
     return CurrentUser(
         user_id=sub,
         email=payload.get("email", ""),
         full_name=payload.get("full_name", ""),
         role=payload.get("role", "user"),
         consent_given=payload.get("consent_given", False),
+        session_id=str(payload["sid"]) if payload.get("sid") else None,
+        auth_time=int(auth_time) if auth_time is not None else None,
     )

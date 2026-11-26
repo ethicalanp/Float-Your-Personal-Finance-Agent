@@ -35,6 +35,9 @@ def _parse_date(date_str: str) -> datetime:
 
 def parse_csv_statement(content_str: str, account_id: str) -> list[dict[str, Any]]:
     """Parse a CSV bank statement with auto-detected columns."""
+    content_str = content_str.lstrip("\ufeff").strip()
+    if not content_str:
+        return []
     reader = csv.reader(io.StringIO(content_str))
     rows = list(reader)
     if not rows:
@@ -95,15 +98,24 @@ def parse_csv_statement(content_str: str, account_id: str) -> list[dict[str, Any
 
         if debit_col != -1 and debit_col < len(row):
             clean_debit = re.sub(r"[^\d.]", "", row[debit_col])
-            debit_val = float(clean_debit) if clean_debit else 0.0
+            try:
+                debit_val = float(clean_debit) if clean_debit else 0.0
+            except ValueError:
+                debit_val = 0.0
 
         if credit_col != -1 and credit_col < len(row):
             clean_credit = re.sub(r"[^\d.]", "", row[credit_col])
-            credit_val = float(clean_credit) if clean_credit else 0.0
+            try:
+                credit_val = float(clean_credit) if clean_credit else 0.0
+            except ValueError:
+                credit_val = 0.0
 
         if debit_val == 0.0 and credit_val == 0.0 and amount_col != -1 and amount_col < len(row):
             clean_amt = re.sub(r"[^\d.]", "", row[amount_col])
-            amt = float(clean_amt) if clean_amt else 0.0
+            try:
+                amt = float(clean_amt) if clean_amt else 0.0
+            except ValueError:
+                amt = 0.0
             t_type = "debit"
             if (
                 type_col != -1

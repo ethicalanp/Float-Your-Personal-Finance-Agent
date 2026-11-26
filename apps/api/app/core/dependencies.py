@@ -53,3 +53,24 @@ def require_consent(consent_type: ConsentType) -> Callable[..., Any]:
         return user
 
     return _consent_checker
+
+
+def require_recent_auth(max_age_seconds: int = 600) -> Callable[..., Any]:
+    """Require recent authentication (<= max_age_seconds) for sensitive operations, else raise 403 reauth_required."""
+
+    async def _recent_auth_checker(
+        current_user: CurrentUser = Depends(get_current_user),
+        user: User = Depends(get_current_active_user),
+    ) -> User:
+        import time
+
+        now = int(time.time())
+        auth_time = current_user.auth_time
+        if auth_time is None or (now - auth_time) > max_age_seconds:
+            raise ForbiddenException(
+                message="Recent authentication is required for this action. Please re-authenticate.",
+                code="reauth_required",
+            )
+        return user
+
+    return _recent_auth_checker
