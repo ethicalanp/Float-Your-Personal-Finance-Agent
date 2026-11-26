@@ -186,7 +186,11 @@ async def run_ingestion_pipeline(
                     )
 
             # 8. Embed chunks in batches with progress logging & ETA
-            passages = [c.content for c in chunks]
+            # Prepend title and heading to text for embedding (keeping chunk.content clean for display)
+            passages = [
+                f"{source.title.strip()}\n{c.heading_path.strip() + '\n' if c.heading_path else ''}{c.content.strip()}"
+                for c in chunks
+            ]
             doc_chunks_count = len(passages)
             print(f"  -> Generated {doc_chunks_count} chunk(s). Embedding in batches of {batch_size}...", flush=True)
 

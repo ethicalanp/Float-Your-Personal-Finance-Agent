@@ -22,6 +22,7 @@ from app.ai.rag.answer_models import (
     KnowledgeQuestionRequest,
     LLMAnswerOutput,
 )
+from app.ai.rag.policy_guard import PolicyGuard
 from app.ai.rag.retrieval import HybridRetriever, RetrievedChunk, RetrievedEvidence
 from app.ai.rag.rewriter import QueryRewriter
 from app.ai.rag.validator import AnswerValidator
@@ -76,6 +77,47 @@ class KnowledgeAnswerService:
         "panam",
     ]
 
+    POLICY_REFUSAL_RULES = [
+        # Investment, stocks, crypto, options trading, leverage advice
+        (
+            r"\b(?:stock|stocks|invest|investing|investment|crypto|bitcoin|ethereum|trading|intraday|"
+            r"forex|nifty|shares?|call option|put option|50x leverage|leverage|binary options)\b",
+            "Float is a read-only consumer personal finance assistant and cannot provide "
+            "stock, crypto, or investment advice.",
+        ),
+        # Tax evasion and tax calculation/filing advice
+        (
+            r"\b(?:tax evasion|hide cash|black money|evade tax|itr filing|tax return filing|bypass tax)\b",
+            "Float cannot provide tax calculation, tax evasion, or formal tax filing advice.",
+        ),
+        # Legal drafting, affidavits, court petitions, litigation representation
+        (
+            r"\b(?:writ petition|affidavit|high court judge|draft a writ|draft an affidavit|"
+            r"lawyer|advocate|court case|sue)\b",
+            "Float cannot draft court petitions, affidavits, or provide formal legal representation advice.",
+        ),
+        # Adversarial prompt injections and system overrides
+        (
+            r"\b(?:ignore all previous|system override|unrestricted|bypass data boundaries|forget you are float)\b",
+            "Request refused: system override or policy violation attempt.",
+        ),
+        # Forged/fake identity documents or illegal certificates
+        (
+            r"\b(?:fake|forge|duplicate)\s+(?:aadhaar|pan|passport|voter|id\s*card|identity|license|driving\s*licence)\b",
+            "Float cannot assist with creating or procuring forged or fraudulent identity documents.",
+        ),
+        # Malayalam refusal keywords
+        (
+            r"(?:ഓഹരി|ക്രിപ്റ്റോ|ടാക്സ്|നികുതി|വക്കീൽ|കോടതി|ഹൈക്കോടതി|ഇൻട്രാഡേ|നിക്ഷേപിക്ക|കള്ളപ്പണം)",
+            "Float cannot provide stock, investment, tax filing, or legal petition advice.",
+        ),
+        # Manglish refusal keywords
+        (
+            r"\b(?:intraday|nifty|call option|put option|black money|white aakkan|vakkeel|case vaadhikkan)\b",
+            "Float cannot provide stock, investment, tax filing, or legal petition advice.",
+        ),
+    ]
+
     DISCLAIMER = (
         "Float provides regulatory information and recovery guidance for educational purposes only. "
         "It does not constitute legal, financial, or tax advice. For emergencies, contact your bank and 1930."
@@ -88,12 +130,14 @@ class KnowledgeAnswerService:
         gateway: LLMGateway,
         validator: AnswerValidator | None = None,
         rewriter: QueryRewriter | None = None,
+        policy_guard: PolicyGuard | None = None,
     ) -> None:
         self.session = session
         self.retriever = retriever
         self.gateway = gateway
         self.validator = validator or AnswerValidator()
         self.rewriter = rewriter or QueryRewriter()
+        self.policy_guard = policy_guard or PolicyGuard(embedder=getattr(self.retriever, "embedder", None))
 
     async def _check_consent(self, user_id: uuid.UUID) -> None:
         """Verify user has an active ai_data_processing consent."""
@@ -205,6 +249,36 @@ class KnowledgeAnswerService:
             refusal_reason=None,
         )
 
+    def _check_policy_guard(
+        self,
+        question: str,
+        language_hint: str | None,
+        trace_id: str,
+        kb_sim: float | None = None,
+    ) -> KnowledgeAnswerResponse | None:
+        """Evaluate multi-layer policy rules (Regex Layer 1 + Intent/Semantic Layer 2)."""
+        res = self.policy_guard.check(question, language_hint=language_hint, kb_sim=kb_sim)
+        if res.refused:
+            lang = language_hint or "en"
+            reason_text = res.reason or "This request is outside Float's verified regulatory scope."
+            return KnowledgeAnswerResponse(
+                status="refused",
+                answer=f"I cannot fulfill this request. {reason_text}",
+                citations=[],
+                confidence="high",
+                refusal_reason=reason_text,
+                language=lang,
+                degraded=False,
+                degraded_reason=None,
+                disclaimer=self.DISCLAIMER,
+                trace_id=trace_id,
+                prompt_version=f"policy_guard_v2_{res.layer}",
+                model=self.gateway.config.model if self.gateway else "guard",
+                provider=self.gateway.config.provider if self.gateway else "local",
+                validation_failures=[],
+            )
+        return None
+
     async def answer(self, request: KnowledgeQuestionRequest, user: User) -> KnowledgeAnswerResponse:
         t0 = time.monotonic()
         trace_id = uuid.uuid4().hex
@@ -212,7 +286,12 @@ class KnowledgeAnswerService:
         # 1. Consent Gate (403 if missing)
         await self._check_consent(user.id)
 
-        # 2. Mask the Question
+        # 2. Policy Guard before retrieval (reject out-of-scope advice requests immediately)
+        guard_response = self._check_policy_guard(request.question, request.language_hint, trace_id)
+        if guard_response:
+            return guard_response
+
+        # 3. Mask the Question
         masked_question = mask_financial_text(request.question)
 
         # 3. Follow-up Rewriting using Conversation Window
@@ -250,6 +329,13 @@ class KnowledgeAnswerService:
 
         # 4. Phase 3 Hybrid Retrieval
         evidence = await self.retriever.retrieve(search_query)
+
+        # 4b. Calibrated Semantic Policy Guard evaluation (Layer 2B with retrieval evidence score)
+        semantic_guard = self._check_policy_guard(
+            request.question, request.language_hint, trace_id, kb_sim=evidence.top_vector_score
+        )
+        if semantic_guard:
+            return semantic_guard
 
         # 5. Abstention Gate BEFORE LLM
         # If no evidence passed threshold, skip LLM entirely
