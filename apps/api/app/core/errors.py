@@ -29,13 +29,32 @@ class UnauthorizedException(AppException):
 
 
 class ForbiddenException(AppException):
-    def __init__(self, message: str = "Access forbidden", details: list[dict[str, Any]] | None = None) -> None:
-        super().__init__(message=message, code="FORBIDDEN", status_code=403, details=details)
+    def __init__(
+        self,
+        message: str = "Access forbidden",
+        code: str = "FORBIDDEN",
+        details: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(message=message, code=code, status_code=403, details=details)
 
 
 class BadRequestException(AppException):
     def __init__(self, message: str = "Bad request", details: list[dict[str, Any]] | None = None) -> None:
         super().__init__(message=message, code="BAD_REQUEST", status_code=400, details=details)
+
+
+class PayloadTooLargeException(AppException):
+    def __init__(
+        self,
+        message: str = "Payload too large",
+        details: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(message=message, code="PAYLOAD_TOO_LARGE", status_code=413, details=details)
+
+
+class ValidationException(AppException):
+    def __init__(self, message: str = "Validation error", details: list[dict[str, Any]] | None = None) -> None:
+        super().__init__(message=message, code="VALIDATION_ERROR", status_code=400, details=details)
 
 
 class ConflictException(AppException):
@@ -49,8 +68,13 @@ class UnprocessableException(AppException):
 
 
 class ServiceUnavailableException(AppException):
-    def __init__(self, message: str = "Service unavailable", details: list[dict[str, Any]] | None = None) -> None:
-        super().__init__(message=message, code="SERVICE_UNAVAILABLE", status_code=503, details=details)
+    def __init__(
+        self,
+        message: str = "Service unavailable",
+        code: str = "SERVICE_UNAVAILABLE",
+        details: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(message=message, code=code, status_code=503, details=details)
 
 
 def format_error_response(

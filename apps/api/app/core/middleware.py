@@ -5,14 +5,114 @@ import time
 import uuid
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
+
+from app.core.errors import format_error_response
 
 # Context variable to make request_id accessible throughout the request lifecycle
 request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="")
+
+MAX_STATEMENT_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_UPLOAD_ERROR_MESSAGE = "Statement content exceeds maximum allowed size of 10 MB."
+
+
+class StatementUploadLimitMiddleware:
+    """Enforces strict statement upload limits without buffering oversized bodies into memory:
+
+    1. Early rejection if Content-Length header > 10 MB (413 PAYLOAD_TOO_LARGE).
+    2. Capped streaming read aborting immediately once cumulative stream bytes exceed 10 MB (413 PAYLOAD_TOO_LARGE).
+    """
+
+    def __init__(self, app: Any, max_size: int = MAX_STATEMENT_UPLOAD_SIZE) -> None:
+        self.app = app
+        self.max_size = max_size
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if (
+            scope["type"] == "http"
+            and scope.get("path", "").endswith("/upload-statement")
+            and scope.get("method") == "POST"
+        ):
+            # 1. Early Content-Length header enforcement
+            headers = dict(scope.get("headers", []))
+            cl_header = headers.get(b"content-length")
+            if cl_header:
+                try:
+                    if int(cl_header.decode("latin1")) > self.max_size:
+                        req_id = request_id_ctx_var.get("")
+                        response = JSONResponse(
+                            status_code=413,
+                            content=format_error_response(
+                                code="PAYLOAD_TOO_LARGE",
+                                message=MAX_UPLOAD_ERROR_MESSAGE,
+                                request_id=req_id,
+                            ),
+                        )
+                        await response(scope, receive, send)
+                        return
+                except (ValueError, UnicodeDecodeError):
+                    pass
+
+            # 2. Capped streaming read enforcement
+            total_bytes = 0
+            limit_exceeded = False
+            client_disconnected = False
+            response_started = False
+
+            async def capped_receive() -> dict[str, Any]:
+                nonlocal total_bytes, limit_exceeded, client_disconnected
+                message = await receive()
+                msg_type = message.get("type")
+                if msg_type == "http.disconnect":
+                    client_disconnected = True
+                    return cast(dict[str, Any], message)
+                if msg_type == "http.request":
+                    body_chunk = message.get("body", b"")
+                    total_bytes += len(body_chunk)
+                    if total_bytes > self.max_size:
+                        from app.core.errors import PayloadTooLargeException
+
+                        limit_exceeded = True
+                        raise PayloadTooLargeException(MAX_UPLOAD_ERROR_MESSAGE)
+                return cast(dict[str, Any], message)
+
+            async def guarded_send(message: dict[str, Any]) -> None:
+                nonlocal response_started
+                # Suppress FastAPI's body-parse error response when our stream cap aborted the read.
+                if limit_exceeded:
+                    return
+                if message.get("type") == "http.response.start":
+                    response_started = True
+                await send(message)
+
+            try:
+                await self.app(scope, capped_receive, guarded_send)
+            except Exception as exc:
+                from app.core.errors import PayloadTooLargeException
+
+                if not isinstance(exc, PayloadTooLargeException) and not limit_exceeded:
+                    raise
+
+            if limit_exceeded and not response_started and not client_disconnected:
+                req_id = request_id_ctx_var.get("")
+                response = JSONResponse(
+                    status_code=413,
+                    content=format_error_response(
+                        code="PAYLOAD_TOO_LARGE",
+                        message=MAX_UPLOAD_ERROR_MESSAGE,
+                        request_id=req_id,
+                    ),
+                )
+                await response(scope, receive, send)
+                return
+
+            return
+
+        await self.app(scope, receive, send)
 
 
 class JsonFormatter(logging.Formatter):

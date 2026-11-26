@@ -59,7 +59,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    tables = list(APP_TABLES) + [KnowledgeDocument.__table__, KnowledgeChunk.__table__]
+    tables = list(dict.fromkeys(list(APP_TABLES) + [KnowledgeDocument.__table__, KnowledgeChunk.__table__]))
     async with engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
 

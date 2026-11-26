@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from typing import Any, Literal, Self
 
@@ -33,11 +34,32 @@ class Settings(BaseSettings):
     jwt_secret_key: str = INSECURE_DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30  # 15 to 30 minutes for security
+    jwt_refresh_token_expire_days: int = 30
+    password_reset_token_expire_minutes: int = 15
+    email_verification_token_expire_hours: int = 24
     internal_metrics_token: SecretStr | None = None
     borrow_model_path: str | None = None
     enable_synthetic_ml_demos: bool = False
     synthetic_borrow_demo_model_path: str | None = None
     synthetic_scam_demo_model_path: str | None = None
+
+    # Google OAuth configuration
+    google_client_id: str | None = None
+    google_client_ids: str = ""
+
+    # SMS & OTP configuration
+    sms_provider: Literal["fake", "msg91", "aws_sns"] = "fake"
+    sms_country_allowlist: str = "+91"
+    msg91_auth_key: SecretStr | None = None
+    msg91_template_id: str | None = None
+    msg91_sender_id: str | None = None
+    sms_daily_cap: int = 1000
+    otp_expiry_seconds: int = 300
+    otp_cooldown_seconds: int = 60
+    otp_max_attempts: int = 5
+    otp_rate_limit_per_phone_hour: int = 5
+    otp_rate_limit_per_ip_hour: int = 20
+    otp_daily_global_cap: int = 1000
 
     # Admin Panel (SQLAdmin) configuration
     admin_enabled: bool = False
@@ -63,6 +85,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_production_rules(self) -> Self:
+        if self.sms_provider == "msg91" and self.app_env != "development":
+            if (
+                not self.msg91_auth_key
+                or not self.msg91_auth_key.get_secret_value().strip()
+                or not self.msg91_template_id
+                or not self.msg91_sender_id
+            ):
+                raise ValueError(
+                    "PFA_MSG91_AUTH_KEY, PFA_MSG91_TEMPLATE_ID, and PFA_MSG91_SENDER_ID must be configured "
+                    "when PFA_SMS_PROVIDER=msg91 in non-development environments."
+                )
+
         if self.app_env == "production":
             if self.debug:
                 raise ValueError("debug must be false when app_env is production")
@@ -85,5 +119,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return a cached settings instance."""
+    """Return a cached settings instance (ignoring local .env files during tests)."""
+    if os.getenv("PFA_APP_ENV") == "test":
+        return Settings(_env_file=None)  # type: ignore[call-arg]
     return Settings()

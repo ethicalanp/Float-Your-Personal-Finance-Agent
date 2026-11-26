@@ -1,12 +1,15 @@
 import math
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 
 def compute_monthly_cash_flow(transactions: list[dict[str, Any]]) -> dict[str, Any]:
-    """Calculate month-by-month inflow, outflow, net savings, and savings rate."""
-    months_data: dict[str, dict[str, float]] = defaultdict(lambda: {"inflow": 0.0, "outflow": 0.0})
+    """Calculate month-by-month inflow, outflow, net savings, and savings rate using Decimal precision."""
+    months_data: dict[str, dict[str, Decimal]] = defaultdict(
+        lambda: {"inflow": Decimal("0.00"), "outflow": Decimal("0.00")}
+    )
 
     for tx in transactions:
         tx_date = tx.get("date")
@@ -17,7 +20,11 @@ def compute_monthly_cash_flow(transactions: list[dict[str, Any]]) -> dict[str, A
         else:
             month_key = "unknown"
 
-        amount = float(tx.get("amount", 0.0))
+        raw_amt = tx.get("amount", 0.0)
+        try:
+            amount = Decimal(str(raw_amt)) if raw_amt is not None else Decimal("0.00")
+        except Exception:
+            amount = Decimal("0.00")
         t_type = tx.get("transaction_type", "debit").lower()
 
         if t_type == "credit":
@@ -27,14 +34,14 @@ def compute_monthly_cash_flow(transactions: list[dict[str, Any]]) -> dict[str, A
 
     sorted_months = sorted(months_data.keys())
     breakdown = []
-    total_inflow = 0.0
-    total_outflow = 0.0
+    total_inflow = Decimal("0.00")
+    total_outflow = Decimal("0.00")
 
     for m in sorted_months:
-        inflow = round(months_data[m]["inflow"], 2)
-        outflow = round(months_data[m]["outflow"], 2)
-        net_savings = round(inflow - outflow, 2)
-        savings_rate = round((net_savings / inflow * 100), 1) if inflow > 0 else 0.0
+        inflow = months_data[m]["inflow"]
+        outflow = months_data[m]["outflow"]
+        net_savings = inflow - outflow
+        savings_rate = float(round((net_savings / inflow * 100), 1)) if inflow > Decimal("0.00") else 0.0
 
         total_inflow += inflow
         total_outflow += outflow
@@ -42,20 +49,22 @@ def compute_monthly_cash_flow(transactions: list[dict[str, Any]]) -> dict[str, A
         breakdown.append(
             {
                 "month": m,
-                "inflow": inflow,
-                "outflow": outflow,
-                "net_savings": net_savings,
+                "inflow": float(inflow),
+                "outflow": float(outflow),
+                "net_savings": float(net_savings),
                 "savings_rate_pct": savings_rate,
             }
         )
 
-    net_total = round(total_inflow - total_outflow, 2)
-    overall_savings_rate = round((net_total / total_inflow * 100), 1) if total_inflow > 0 else 0.0
+    net_total = total_inflow - total_outflow
+    overall_savings_rate = (
+        float(round((net_total / total_inflow * 100), 1)) if total_inflow > Decimal("0.00") else 0.0
+    )
 
     return {
-        "total_inflow": round(total_inflow, 2),
-        "total_outflow": round(total_outflow, 2),
-        "net_savings": net_total,
+        "total_inflow": float(total_inflow),
+        "total_outflow": float(total_outflow),
+        "net_savings": float(net_total),
         "overall_savings_rate_pct": overall_savings_rate,
         "monthly_breakdown": breakdown,
     }
