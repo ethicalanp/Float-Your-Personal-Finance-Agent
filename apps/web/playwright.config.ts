@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
+  testMatch: /.*\.spec\.ts/,
   timeout: 30 * 1000,
   expect: {
     timeout: 5000,
@@ -9,7 +10,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: "list",
   use: {
     baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || "http://127.0.0.1:3000",
@@ -26,9 +27,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run start",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: !process.env.CI,
+    command: process.env.PLAYWRIGHT_START_CMD || "npm.cmd run start",
+    url: process.env.PLAYWRIGHT_TEST_BASE_URL || "http://127.0.0.1:3000",
+    reuseExistingServer: true,
     timeout: 60 * 1000,
   },
 });

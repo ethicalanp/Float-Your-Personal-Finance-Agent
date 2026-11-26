@@ -383,9 +383,10 @@ export const landingContent: LandingContent = {
       {
         title: "Trust & Safety",
         links: [
-          { label: "Security Safeguards", href: "#security" },
+          { label: "Security & Privacy", href: "/security" },
+          { label: "Download App", href: "/download" },
           { label: "Helpline 1930", href: "https://cybercrime.gov.in" },
-          { label: "Report Fraud", href: "#live-check" },
+          { label: "Report Fraud", href: "/protect" },
         ],
       },
       {

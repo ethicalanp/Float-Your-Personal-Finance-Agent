@@ -1,0 +1,316 @@
+export type Language = "en" | "ml" | "manglish";
+
+export interface TranslationMetadata {
+  language: Language;
+  needsReview: boolean;
+  verified: boolean;
+}
+
+export const I18N_METADATA: Record<Language, TranslationMetadata> = {
+  en: {
+    language: "en",
+    needsReview: false,
+    verified: true,
+  },
+  ml: {
+    language: "ml",
+    needsReview: true,
+    verified: false, // Explicitly marked as not human-reviewed
+  },
+  manglish: {
+    language: "manglish",
+    needsReview: true,
+    verified: false, // Explicitly marked as not human-reviewed
+  },
+};
+
+export const DICTIONARY = {
+  en: {
+    nav: {
+      home: "Home",
+      protect: "Protect",
+      borrow: "Borrow",
+      assistant: "Assistant",
+      settings: "Settings",
+      logout: "Log Out",
+    },
+    common: {
+      loading: "Loading...",
+      error: "Something went wrong",
+      retry: "Retry",
+      save: "Save",
+      submit: "Submit",
+      cancel: "Cancel",
+      privacyMode: "Privacy Mode",
+      disclaimerTitle: "Important Legal Notice",
+      indicativeOnly: "Indicative readiness only. Not financial or legal advice.",
+      helpline1930: "Call National Cybercrime Helpline 1930",
+    },
+    home: {
+      title: "Plan & Cash Flow",
+      subtitle: "Understand your income, spending, and monthly savings trajectory.",
+      uploadStatement: "Upload Bank Statement",
+      uploadHelp: "Upload monthly CSV statement (Max 10 MB). Processed strictly on device/backend.",
+      dragDrop: "Drag & drop your statement CSV here, or click to browse",
+      uploading: "Uploading and analyzing transactions...",
+      inflow: "Total Inflow",
+      outflow: "Total Outflow",
+      netSavings: "Net Savings",
+      topCategories: "Top Spending Categories",
+      monthlyTrend: "Monthly Net Flow",
+      emptyState: "No transaction data yet. Upload your first statement to generate insights.",
+      duplicateWarning: "This statement has already been uploaded. Duplicate transactions were skipped.",
+    },
+    protect: {
+      title: "Protect Against Fraud",
+      subtitle: "Verify suspicious messages, track recovery, and access verified helpline contacts.",
+      tabScamCheck: "Scam Checker",
+      tabChecklist: "First-Hour Checklist",
+      tabRecovery: "Recovery Cases",
+      tabContacts: "Verified Contacts",
+      pastePlaceholder: "Paste suspicious SMS, WhatsApp, or email message text here...",
+      checkButton: "Analyze Message",
+      emergencyNotice: "If you lost money in the last 2 hours, call 1930 immediately.",
+    },
+    borrow: {
+      title: "Borrow Readiness",
+      subtitle: "Indicative credit readiness based on historical cash-flow stability.",
+      checkButton: "Assess My Readiness",
+      disclaimer: "Indicative readiness only. Float is not a lender or credit rating agency.",
+    },
+    assistant: {
+      title: "Float Financial Assistant",
+      subtitle: "Ask questions regarding banking rules, fraud protections, and cash flow.",
+      placeholder: "Ask about cyber fraud, 1930 helpline, or cash flow...",
+      send: "Send",
+      consentNotice: "AI data processing consent is required before using the assistant.",
+      citations: "Official Regulatory Sources",
+    },
+    settings: {
+      title: "Settings & Privacy",
+      subtitle: "Manage your authentication credentials, active sessions, and DPDP consent preferences.",
+      signinMethods: "Sign-in Methods",
+      activeSessions: "Active Sessions",
+      consentPreferences: "Consent Preferences",
+    },
+  },
+  ml: {
+    nav: {
+      home: "ഹോം",
+      protect: "സുരക്ഷ",
+      borrow: "വായ്പ തയ്യാറെടുപ്പ്",
+      assistant: "അസിസ്റ്റന്റ്",
+      settings: "സെറ്റിംഗ്സ്",
+      logout: "ലോഗ് ഔട്ട്",
+    },
+    common: {
+      loading: "ലോഡ് ചെയ്യുന്നു...",
+      error: "എന്തോ തകരാർ സംഭവിച്ചു",
+      retry: "വീണ്ടും ശ്രമിക്കുക",
+      save: "സേവ് ചെയ്യുക",
+      submit: "സമർപ്പിക്കുക",
+      cancel: "റദ്ദാക്കുക",
+      privacyMode: "സ്വകാര്യതാ മോഡ്",
+      disclaimerTitle: "പ്രധാനപ്പെട്ട അറിയിപ്പ്",
+      indicativeOnly: "സൂചക തയ്യാറെടുപ്പ് മാത്രം. സാമ്പത്തിക ഉപദേശമല്ല.",
+      helpline1930: "ദേശീയ സൈബർ ഹെൽപ്പ്‌ലൈൻ 1930 വിളിക്കുക",
+    },
+    home: {
+      title: "പ്ലാൻ & പണമിടപാടുകൾ",
+      subtitle: "നിങ്ങളുടെ വരുമാനം, ചെലവ്, മാസ സമ്പാദ്യം എന്നിവ മനസ്സിലാക്കുക.",
+      uploadStatement: "ബാങ്ക് സ്റ്റേറ്റ്‌മെന്റ് അപ്‌ലോഡ് ചെയ്യുക",
+      uploadHelp: "CSV സ്റ്റേറ്റ്‌മെന്റ് അപ്‌ലോഡ് ചെയ്യുക (പരമാവധി 10 MB).",
+      dragDrop: "CSV ഫയൽ ഇവിടെ ഇടുക അല്ലെങ്കിൽ തിരഞ്ഞെടുക്കുക",
+      uploading: "അപ്‌ലോഡ് ചെയ്തു പരിശോധിക്കുന്നു...",
+      inflow: "ആകെ വരുമാനം",
+      outflow: "ആകെ ചെലവ്",
+      netSavings: "മാസ സമ്പാദ്യം",
+      topCategories: "പ്രധാന ചെലവുകൾ",
+      monthlyTrend: "പ്രതിമാസ മാറ്റങ്ങൾ",
+      emptyState: "ഇടപാടുകൾ ലഭ്യമല്ല. വിശകലനത്തിനായി സ്റ്റേറ്റ്‌മെന്റ് അപ്‌ലോഡ് ചെയ്യുക.",
+      duplicateWarning: "ഈ സ്റ്റേറ്റ്‌മെന്റ് ഇതിനകം അപ്‌ലോഡ് ചെയ്തതാണ്. ആവർത്തിച്ച ഇടപാടുകൾ ഒഴിവാക്കി.",
+    },
+    protect: {
+      title: "തട്ടിപ്പുകളിൽ നിന്ന് സുരക്ഷ",
+      subtitle: "സംശയാസ്പദമായ സന്ദേശങ്ങൾ പരിശോധിക്കുക, ഹെൽപ്പ്‌ലൈൻ നമ്പറുകൾ കണ്ടെത്തുക.",
+      tabScamCheck: "തട്ടിപ്പ് പരിശോധന",
+      tabChecklist: "ആദ്യ മണിക്കൂർ ചെക്ക്‌ലിസ്റ്റ്",
+      tabRecovery: "പരാതികൾ",
+      tabContacts: "പരിശോധിച്ച നമ്പറുകൾ",
+      pastePlaceholder: "സംശയാസ്പദമായ സന്ദേശം ഇവിടെ പേസ്റ്റ് ചെയ്യുക...",
+      checkButton: "പരിശോധിക്കുക",
+      emergencyNotice: "കഴിഞ്ഞ 2 മണിക്കൂറിനുള്ളിൽ പണം നഷ്ടപ്പെട്ടെങ്കിൽ ഉടൻ 1930 വിളിക്കുക.",
+    },
+    borrow: {
+      title: "വായ്പ തയ്യാറെടുപ്പ്",
+      subtitle: "പണമിടപാടുകളുടെ സ്ഥിരത അടിസ്ഥാനമാക്കിയുള്ള തയ്യാറെടുപ്പ്.",
+      checkButton: "പരിശോധിക്കുക",
+      disclaimer: "സൂചക തയ്യാറെടുപ്പ് മാത്രം. ഫ്ലോട്ട് വായ്പ നൽകുന്ന സ്ഥാപനമല്ല.",
+    },
+    assistant: {
+      title: "ഫ്ലോട്ട് ഫിനാൻഷ്യൽ അസിസ്റ്റന്റ്",
+      subtitle: "ബാങ്കിംഗ് നിയമങ്ങൾ, സൈബർ സുരക്ഷ എന്നിവയെക്കുറിച്ച് ചോദിക്കുക.",
+      placeholder: "സൈബർ തട്ടിപ്പ്, 1930 ഹെൽപ്പ്‌ലൈൻ എന്നിവയെക്കുറിച്ച് ചോദിക്കുക...",
+      send: "അയക്കുക",
+      consentNotice: "അസിസ്റ്റന്റ് ഉപയോഗിക്കാൻ AI ഡാറ്റാ അനുമതി ആവശ്യമാണ്.",
+      citations: "ഔദ്യോഗിക ഉറവിടങ്ങൾ",
+    },
+    settings: {
+      title: "സെറ്റിംഗ്സ് & സ്വകാര്യത",
+      subtitle: "ലോഗിൻ രീതികളും അനുമതികളും പരിശോധിക്കുക.",
+      signinMethods: "ലോഗിൻ രീതികൾ",
+      activeSessions: "സജീവ സെഷനുകൾ",
+      consentPreferences: "അനുമതി മുൻഗണനകൾ",
+    },
+  },
+  manglish: {
+    nav: {
+      home: "Home",
+      protect: "Protect Cheyyuka",
+      borrow: "Loan Readiness",
+      assistant: "Assistant",
+      settings: "Settings",
+      logout: "Log Out",
+    },
+    common: {
+      loading: "Loading aakunnu...",
+      error: "Enthekilum kuzhappam undayi",
+      retry: "Veendum try cheyyuka",
+      save: "Save Cheyyuka",
+      submit: "Submit Cheyyuka",
+      cancel: "Cancel",
+      privacyMode: "Privacy Mode",
+      disclaimerTitle: "Pradhana Notice",
+      indicativeOnly: "Indicative readiness mathram. Financial advice alla.",
+      helpline1930: "National Cyber Helpline 1930 vilikkuka",
+    },
+    home: {
+      title: "Plan & Cash Flow",
+      subtitle: "Ningalude income, spending, monthly savings manassilaakkuka.",
+      uploadStatement: "Bank Statement Upload Cheyyuka",
+      uploadHelp: "CSV statement upload cheyyuka (Max 10 MB).",
+      dragDrop: "CSV file ivide drop cheyyuka, or click cheythu browse cheyyuka",
+      uploading: "Upload cheythu analyze cheyyunnu...",
+      inflow: "Total Inflow",
+      outflow: "Total Outflow",
+      netSavings: "Net Savings",
+      topCategories: "Top Categories",
+      monthlyTrend: "Monthly Trend",
+      emptyState: "Transactions onnum illa. Statement upload cheyyuka.",
+      duplicateWarning: "Ee statement munpe upload cheythathaanu. Duplicates skip cheythu.",
+    },
+    protect: {
+      title: "Scams ninnu Protect Cheyyuka",
+      subtitle: "Suspicious messages check cheyyuka, helpline contacts kandethuka.",
+      tabScamCheck: "Scam Check",
+      tabChecklist: "First-Hour Checklist",
+      tabRecovery: "Recovery Cases",
+      tabContacts: "Verified Contacts",
+      pastePlaceholder: "Suspicious message ivide paste cheyyuka...",
+      checkButton: "Analyze Cheyyuka",
+      emergencyNotice: "Last 2 hours-il panam nashtappettengil udan 1930 vilikkuka.",
+    },
+    borrow: {
+      title: "Loan Readiness",
+      subtitle: "Cash-flow stability vechu readiness check cheyyuka.",
+      checkButton: "Readiness Check Cheyyuka",
+      disclaimer: "Indicative readiness mathram. Float lender alla.",
+    },
+    assistant: {
+      title: "Float Financial Assistant",
+      subtitle: "Banking rules, cyber protection kurichu chodikkuka.",
+      placeholder: "Cyber fraud, 1930 helpline kurichu chodikkuka...",
+      send: "Send",
+      consentNotice: "Assistant use cheyyan AI consent aavashyamaanu.",
+      citations: "Official Sources",
+    },
+    settings: {
+      title: "Settings & Privacy",
+      subtitle: "Login credentials, active sessions, consent preferences manage cheyyuka.",
+      signinMethods: "Sign-in Methods",
+      activeSessions: "Active Sessions",
+      consentPreferences: "Consent Preferences",
+    },
+  },
+} as const;
+
+export function getActiveLanguage(): Language {
+  if (typeof window === "undefined") return "en";
+  const stored = localStorage.getItem("float_lang") as Language;
+  if (stored && (stored === "en" || stored === "ml" || stored === "manglish")) {
+    return stored;
+  }
+  return "en";
+}
+
+export function setActiveLanguage(lang: Language): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("float_lang", lang);
+  }
+}
+
+/**
+ * Returns translated string dictionary for selected language, falling back to English.
+ */
+export function getTranslation(lang: Language = "en") {
+  const dict = DICTIONARY[lang];
+  if (!dict) return DICTIONARY.en;
+  return dict;
+}
+
+/**
+ * Currency formatter with Indian numbering (Lakh/Crore) and privacy masking.
+ */
+export function formatINR(
+  amount: number,
+  options?: { hideAmount?: boolean; compact?: boolean }
+): string {
+  if (options?.hideAmount) {
+    return "₹ ••••••";
+  }
+
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+
+  if (options?.compact) {
+    if (abs >= 10000000) {
+      return `${sign}₹ ${(abs / 10000000).toFixed(2)} Cr`;
+    }
+    if (abs >= 100000) {
+      return `${sign}₹ ${(abs / 100000).toFixed(2)} L`;
+    }
+  }
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+/**
+ * Formats dates strictly in Indian Standard Time (IST - Asia/Kolkata).
+ */
+export function formatISTDate(
+  date: Date | string | number,
+  formatStyle: "short" | "medium" | "full" = "medium"
+): string {
+  const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "Invalid Date";
+
+  const optionsMap: Record<string, Intl.DateTimeFormatOptions> = {
+    short: { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Kolkata" },
+    medium: { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" },
+    full: {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Kolkata",
+      timeZoneName: "short",
+    },
+  };
+
+  return new Intl.DateTimeFormat("en-IN", optionsMap[formatStyle]).format(d);
+}

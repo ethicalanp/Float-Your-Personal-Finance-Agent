@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { landingContent } from "@/content/landing";
+import OfflineBanner from "@/components/OfflineBanner";
+import GetAppPrompt from "@/components/GetAppPrompt";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -38,15 +40,42 @@ export const metadata: Metadata = {
   },
 };
 
+const THEME_SCRIPT = `
+(function() {
+  try {
+    var stored = localStorage.getItem('float_theme');
+    var theme = stored || 'system';
+    var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-scheme', isDark ? 'dark' : 'light');
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-screen bg-bg text-ink font-sans antialiased selection:bg-accent/20 selection:text-ink">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+        >
+          Skip to main content
+        </a>
+        <OfflineBanner />
         {children}
+        <GetAppPrompt />
       </body>
     </html>
   );

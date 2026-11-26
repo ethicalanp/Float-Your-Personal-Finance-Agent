@@ -1,0 +1,147 @@
+"""
+Real-Backend Smoke Walkthrough (Item 9)
+Runs against the real PostgreSQL database in Docker with ENV=local and fake AI provider.
+Walks the user flow: signup -> consent -> CSV upload -> home (cash flow) -> protect -> borrow -> assistant.
+"""
+import os
+import sys
+
+# Configure environment for real local postgres & fake AI provider
+os.environ["ENV"] = "local"
+os.environ["PFA_APP_ENV"] = "development"
+os.environ["PFA_AI_PROVIDER"] = "fake"
+os.environ["PFA_LLM_PROVIDER"] = "fake"
+os.environ["PFA_DATABASE_URL"] = "postgresql+psycopg://float:float_dev_password_change_me@localhost:5432/float"
+os.environ["PFA_BORROW_MODEL_PATH"] = "artifacts/synthetic_ml_v2/borrow_model_lightgbm"
+
+import uuid
+from fastapi.testclient import TestClient
+from app.main import app
+
+def run_smoke():
+    client = TestClient(app)
+    results = {}
+    
+    # 1. Health & Capabilities Check
+    health_res = client.get("/ready")
+    assert health_res.status_code == 200, f"Health check failed: {health_res.text}"
+    
+    caps_res = client.get("/api/v1/auth/capabilities")
+    assert caps_res.status_code == 200
+    
+    # 2. Signup
+    unique_email = f"smoke_{uuid.uuid4().hex[:8]}@example.com"
+    signup_payload = {
+        "email": unique_email,
+        "password": "StrongPassword123!",
+        "full_name": "Smoke Test User"
+    }
+    signup_res = client.post("/api/v1/auth/register", json=signup_payload)
+    results["signup"] = "PASS" if signup_res.status_code in (200, 201) else f"FAIL ({signup_res.status_code}: {signup_res.text})"
+    assert signup_res.status_code in (200, 201), f"Signup failed: {signup_res.text}"
+    
+    token = signup_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # 2b. Login validation (valid credentials -> 200, invalid password -> 401)
+    bad_login_res = client.post("/api/v1/auth/login", json={"email": unique_email, "password": "WrongPassword999!"})
+    assert bad_login_res.status_code == 401, f"Expected 401 on wrong password, got {bad_login_res.status_code}"
+    results["login_invalid"] = "PASS"
+
+    good_login_res = client.post("/api/v1/auth/login", json={"email": unique_email, "password": "StrongPassword123!"})
+    assert good_login_res.status_code == 200, f"Expected 200 on good login, got {good_login_res.status_code}"
+    assert "access_token" in good_login_res.json()
+    results["login_valid"] = "PASS"
+    
+    # 3. Consent
+    consent_payload = {
+        "terms_accepted": True,
+        "privacy_accepted": True,
+        "ai_data_processing_consent": True,
+    }
+    consent_res = client.post("/api/v1/auth/consent", json=consent_payload, headers=headers)
+    results["consent"] = "PASS" if consent_res.status_code == 200 else f"FAIL ({consent_res.status_code}: {consent_res.text})"
+    assert consent_res.status_code == 200, f"Consent failed: {consent_res.text}"
+    
+    # 4. Account Creation
+    acc_payload = {
+        "name": "Smoke Savings",
+        "account_type": "savings",
+        "institution_name": "State Bank of India",
+        "account_number_mask": "****9876",
+        "currency": "INR",
+        "initial_balance": 10000.0
+    }
+    acc_res = client.post("/api/v1/plan/accounts", json=acc_payload, headers=headers)
+    assert acc_res.status_code in (200, 201), f"Account creation failed: {acc_res.text}"
+    account_id = acc_res.json()["id"]
+    
+    # 5. CSV Statement Upload
+    csv_statement = (
+        "Date,Description,Amount,Type\n"
+        "2026-10-01,Salary Credit,85000,credit\n"
+        "2026-10-05,House Rent Transfer,25000,debit\n"
+        "2026-10-10,Supermarket Grocery,8500,debit\n"
+        "2026-10-15,Electricity Bill,2200,debit\n"
+        "2026-11-01,Salary Credit,85000,credit\n"
+        "2026-11-05,House Rent Transfer,25000,debit\n"
+        "2026-11-12,Dining & Food,4500,debit\n"
+    )
+    upload_payload = {
+        "account_id": account_id,
+        "format": "csv",
+        "content": csv_statement
+    }
+    upload_res = client.post("/api/v1/plan/upload-statement", json=upload_payload, headers=headers)
+    results["csv_upload"] = "PASS" if upload_res.status_code == 200 and upload_res.json().get("imported_count", 0) > 0 else f"FAIL ({upload_res.status_code}: {upload_res.text})"
+    assert upload_res.status_code == 200, f"CSV upload failed: {upload_res.text}"
+    
+    # 6. Home (Cash Flow Summary)
+    flow_res = client.get("/api/v1/plan/cash-flow", headers=headers)
+    results["home"] = "PASS" if flow_res.status_code == 200 and flow_res.json().get("total_inflow", 0) > 0 else f"FAIL ({flow_res.status_code}: {flow_res.text})"
+    assert flow_res.status_code == 200, f"Cash flow failed: {flow_res.text}"
+    
+    # 7. Protect (Scam Check)
+    scam_payload = {
+        "message": "Your electricity bill is overdue. Power disconnected tonight unless you pay at http://bit.ly/kseb-urgent",
+        "language_hint": "en"
+    }
+    protect_res = client.post("/api/v1/protect/check", json=scam_payload, headers=headers)
+    results["protect"] = "PASS" if protect_res.status_code == 200 and "analysis" in protect_res.json() else f"FAIL ({protect_res.status_code}: {protect_res.text})"
+    assert protect_res.status_code == 200, f"Protect failed: {protect_res.text}"
+    
+    # 8. Borrow (Readiness Assessment - Requires 200/201 with tier + reasons)
+    borrow_payload = {"account_id": account_id}
+    borrow_res = client.post("/api/v1/borrow/assess", json=borrow_payload, headers=headers)
+    assert borrow_res.status_code == 201, f"Borrow assessment failed (status {borrow_res.status_code}): {borrow_res.text}"
+    borrow_data = borrow_res.json()
+    assert "readiness_band" in borrow_data and borrow_data["readiness_band"], "Missing readiness tier"
+    assert "top_factors" in borrow_data and len(borrow_data["top_factors"]) > 0, "Missing factor reasons"
+    results["borrow"] = f"PASS (tier: {borrow_data['readiness_band']}, {len(borrow_data['top_factors'])} factors)"
+
+    # 8b. Borrow 503 Fallback Test (Separate test: unconfigured model must fail gracefully with 503)
+    from app.core.config import get_settings
+    orig_path = get_settings().borrow_model_path
+    try:
+        get_settings().borrow_model_path = "non_existent_model_dir"
+        fallback_res = client.post("/api/v1/borrow/assess", json=borrow_payload, headers=headers)
+        assert fallback_res.status_code == 503, f"Expected 503 for unconfigured borrow model, got {fallback_res.status_code}"
+        results["borrow_503_fallback"] = "PASS (503 Service Unavailable on unconfigured model)"
+    finally:
+        get_settings().borrow_model_path = orig_path
+
+    # 9. Assistant (Knowledge RAG / Chat)
+    assistant_payload = {
+        "question": "What is the 3-day zero liability rule for unauthorized banking transactions?",
+        "language_hint": "en"
+    }
+    assistant_res = client.post("/api/v1/assistant/knowledge", json=assistant_payload, headers=headers)
+    results["assistant"] = "PASS" if assistant_res.status_code == 200 and "answer" in assistant_res.json() else f"FAIL ({assistant_res.status_code}: {assistant_res.text})"
+    assert assistant_res.status_code == 200, f"Assistant failed: {assistant_res.text}"
+
+    print("\n=== SMOKE WALKTHROUGH RESULTS ===")
+    for step, outcome in results.items():
+        print(f"  {step}: {outcome}")
+
+if __name__ == "__main__":
+    run_smoke()
