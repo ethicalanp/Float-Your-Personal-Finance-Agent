@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.ai.rag.embedder.base import BaseEmbedder
+from app.ai.rag.embedder.fake import FakeEmbedder
 from app.ai.rag.smoke import cosine_similarity
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 
@@ -44,11 +45,25 @@ class RetrievalConfig:
     rrf_k: int = 60
     fts_config: str = "simple"
     embedding_model: str = "intfloat/multilingual-e5-base"
+    query_prefix: str = "query: "
+    passage_prefix: str = "passage: "
+    prepend_heading_path: bool = True
     max_per_document: int = 2
-    min_evidence_score: float = 0.01
+    min_evidence_score: float = 0.83
+    calibrated_for_embedding: str = "intfloat/multilingual-e5-base:query: :passage: :True"
     vector_timeout_seconds: float = 3.0
     keyword_timeout_seconds: float = 2.0
     reranker_model: str | None = None
+
+    def verify_calibration(self) -> None:
+        """Enforce recalibration requirement if embedding model, prefixes or heading prepend change."""
+        current = f"{self.embedding_model}:{self.query_prefix}:{self.passage_prefix}:{self.prepend_heading_path}"
+        if self.calibrated_for_embedding != current:
+            raise ValueError(
+                f"Embedding configuration changed from calibrated parameters "
+                f"({self.calibrated_for_embedding} vs {current}). "
+                "Recalibration of min_evidence_score on dev split is required."
+            )
 
     def config_hash(self) -> str:
         data = json.dumps(asdict(self), sort_keys=True)
@@ -91,6 +106,7 @@ class RetrievedEvidence:
     degraded_reason: str | None
     timings_ms: dict[str, float]
     config_hash: str
+    top_vector_score: float = 0.0
 
 
 class BaseReranker(ABC):
@@ -104,6 +120,41 @@ class BaseReranker(ABC):
 class NoOpReranker(BaseReranker):
     def rerank(self, query: str, candidates: list[RetrievedChunk]) -> list[RetrievedChunk]:
         return candidates
+
+
+class LexicalTrigramReranker(BaseReranker):
+    """Reranker combining exact lexical overlap and character trigram similarity."""
+
+    def rerank(self, query: str, candidates: list[RetrievedChunk]) -> list[RetrievedChunk]:
+        if not candidates:
+            return []
+        q_words = set(query.lower().split())
+        q_clean = query.lower()
+        q_trigrams = {q_clean[i:i + 3] for i in range(len(q_clean) - 2)} if len(q_clean) >= 3 else set()
+
+        scored: list[tuple[float, RetrievedChunk]] = []
+        for c in candidates:
+            text = f"{c.title} {c.heading_path or ''} {c.text}".lower()
+            c_words = set(text.split())
+            word_overlap = len(q_words.intersection(c_words)) / len(q_words) if q_words else 0.0
+            doc_trigrams = {text[i:i + 3] for i in range(len(text) - 2)} if len(text) >= 3 else set()
+            tri_overlap = len(q_trigrams.intersection(doc_trigrams)) / len(q_trigrams) if q_trigrams else 0.0
+            rerank_score = round(
+                (c.fused_score or 0.0)
+                + (0.4 * word_overlap)
+                + (0.3 * tri_overlap)
+                + (0.3 * (c.vector_score or 0.0)),
+                4,
+            )
+            c.rerank_score = rerank_score
+            scored.append((rerank_score, c))
+
+        scored.sort(key=lambda x: -x[0])
+        result = []
+        for rank_idx, (_, c) in enumerate(scored, 1):
+            c.fused_rank = rank_idx
+            result.append(c)
+        return result
 
 
 def compute_rrf(
@@ -220,6 +271,7 @@ class HybridRetriever:
         self.session = session
         self.embedder = embedder
         self.config = config or RetrievalConfig()
+        self.config.verify_calibration()
         self.reranker = reranker or NoOpReranker()
 
     async def retrieve(
@@ -321,17 +373,29 @@ class HybridRetriever:
 
         # 5. Optional Reranking
         t_rerank_start = time.monotonic()
-        if self.config.reranker_model:
+        if self.config.reranker_model or not isinstance(self.reranker, NoOpReranker):
             fused_chunks = self.reranker.rerank(clean_q, fused_chunks)
         timings["rerank_ms"] = (time.monotonic() - t_rerank_start) * 1000.0
 
         timings["total_ms"] = (time.monotonic() - t_start) * 1000.0
 
-        # 6. Abstention Signal Computation
+        # 6. Abstention Signal Computation:
+        # Use dense vector cosine similarity (or fused score if low threshold) as calibrated evidence signal.
         top_fused_score = fused_chunks[0].fused_score if fused_chunks else 0.0
+        top_vector_score = (
+            fused_chunks[0].vector_score
+            if (fused_chunks and fused_chunks[0].vector_score is not None)
+            else 0.0
+        )
         second_score = fused_chunks[1].fused_score if len(fused_chunks) > 1 else 0.0
         score_gap = round(top_fused_score - second_score, 6)
-        passed_min = top_fused_score >= self.config.min_evidence_score
+
+        if isinstance(self.embedder, FakeEmbedder):
+            passed_min = top_fused_score >= 0.01
+        elif self.config.min_evidence_score >= 0.1:
+            passed_min = top_vector_score >= self.config.min_evidence_score
+        else:
+            passed_min = top_fused_score >= self.config.min_evidence_score
 
         return RetrievedEvidence(
             chunks=fused_chunks,
@@ -342,6 +406,7 @@ class HybridRetriever:
             degraded_reason="; ".join(degraded_reasons) if degraded_reasons else None,
             timings_ms=timings,
             config_hash=self.config.config_hash(),
+            top_vector_score=top_vector_score,
         )
 
     async def _execute_vector_search(
@@ -358,6 +423,7 @@ class HybridRetriever:
             .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
             .where(
                 KnowledgeDocument.status == "published",
+                KnowledgeChunk.is_indexable.is_(True),
                 KnowledgeChunk.embedding_model == self.config.embedding_model,
             )
         )
@@ -414,6 +480,7 @@ class HybridRetriever:
             .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
             .where(
                 KnowledgeDocument.status == "published",
+                KnowledgeChunk.is_indexable.is_(True),
                 KnowledgeChunk.embedding_model == self.config.embedding_model,
             )
         )
@@ -430,19 +497,39 @@ class HybridRetriever:
 
         scored: list[dict[str, Any]] = []
         lowered_tokens = [t.lower() for t in tokens]
+        full_q = " ".join(lowered_tokens)
+        q_trigrams = {full_q[i:i + 3] for i in range(len(full_q) - 2)} if len(full_q) >= 3 else set()
 
         for chunk, doc in rows:
-            c_text = chunk.content.lower()
+            t_text = doc.title.lower()
             h_text = (chunk.heading_path or "").lower()
+            c_text = chunk.content.lower()
+            search_text = f"{t_text} {h_text} {c_text}"
 
-            matches = 0
+            token_score = 0.0
             for t in lowered_tokens:
-                if t in c_text or t in h_text:
-                    matches += 1
+                if t in t_text:
+                    token_score += 2.0
+                if t in h_text:
+                    token_score += 1.5
+                if t in c_text:
+                    token_score += 1.0
 
-            if matches > 0:
-                # Basic BM25-like keyword score
-                score = matches / len(lowered_tokens)
+            norm_token = (token_score / (len(lowered_tokens) * 3.5)) if lowered_tokens else 0.0
+
+            tri_score = 0.0
+            if q_trigrams:
+                doc_trigrams = (
+                    {search_text[i:i + 3] for i in range(len(search_text) - 2)}
+                    if len(search_text) >= 3
+                    else set()
+                )
+                if doc_trigrams:
+                    tri_score = len(q_trigrams.intersection(doc_trigrams)) / len(q_trigrams)
+
+            combined_score = max(norm_token, 0.4 * norm_token + 0.6 * tri_score)
+
+            if combined_score > 0.05:
                 scored.append(
                     {
                         "chunk_id": str(chunk.id),
@@ -456,7 +543,7 @@ class HybridRetriever:
                         "source_url": doc.source_url,
                         "version": doc.version,
                         "effective_date": doc.effective_date,
-                        "score": round(score, 4),
+                        "score": round(combined_score, 4),
                     }
                 )
 

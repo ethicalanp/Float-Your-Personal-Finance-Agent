@@ -63,6 +63,15 @@ ios/Pods/
 # Jupyter
 .ipynb_checkpoints/
 notebooks/
+!evals/notebooks/
+
+# Evals and experiment reports
+evals/reports/
+evals/data/
+evals/.cache/
+apps/api/evals/reports/
+apps/api/evals/data/
+apps/api/evals/.cache/
 
 # Local documents and instructions
 db_design2.dbml

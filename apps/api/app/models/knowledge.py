@@ -3,6 +3,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Computed,
     DateTime,
@@ -86,6 +87,7 @@ class KnowledgeChunk(Base):
             postgresql_using="hnsw",
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
+        Index("idx_knowledge_chunks_is_indexable", "is_indexable"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -107,4 +109,7 @@ class KnowledgeChunk(Base):
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
     embedding_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    is_indexable: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

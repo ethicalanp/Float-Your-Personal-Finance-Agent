@@ -158,3 +158,103 @@ class ComprehensiveReport(BaseModel):
     suites: dict[str, SuiteEvaluationResult]
     targets: dict[str, dict[str, Any]]
     regression_comparison: dict[str, Any] | None = None
+
+
+RAGCaseType = Literal["answerable", "unanswerable", "refusal_expected", "adversarial"]
+RAGReviewAction = Literal["approve", "edit", "reject"]
+RAGCaseStatus = Literal["draft", "reviewed", "rejected"]
+
+
+class RAGEvalCase(BaseModel):
+    id: str = Field(..., pattern=r"^[a-zA-Z0-9_\-\.]+$")
+    language: CaseLanguage
+    type: RAGCaseType
+    question: str
+    reference_answer: str = ""
+    gold_chunk_id: str | None = None
+    gold_chunk_ids: list[str] = Field(default_factory=list)
+    gold_document_id: str | None = None
+    required_facts: list[str] = Field(default_factory=list)
+    status: RAGCaseStatus = "draft"
+    review_action: RAGReviewAction | None = None
+    review_notes: str = ""
+    split: CaseSplit = "dev"
+    needs_native_review: bool = False
+
+    @property
+    def acceptable_chunk_ids(self) -> list[str]:
+        ids: list[str] = []
+        if self.gold_chunk_id:
+            ids.append(self.gold_chunk_id)
+        for gid in self.gold_chunk_ids:
+            if gid and gid not in ids:
+                ids.append(gid)
+        return ids
+
+    @model_validator(mode="after")
+    def flag_native_review(self) -> "RAGEvalCase":
+        if self.language in ("ml", "manglish"):
+            self.needs_native_review = True
+        return self
+
+
+class RetrievalMetricsReport(BaseModel):
+    recall_at_5: MetricSummary
+    recall_at_10: MetricSummary
+    mrr: MetricSummary
+    ndcg_at_5: MetricSummary
+    hit_rate: MetricSummary
+    answer_bearing_hit: MetricSummary | None = None
+    sample_size: int = 0
+
+
+class AnswerMetricsReport(BaseModel):
+    status_accuracy: MetricSummary
+    citation_validity: MetricSummary
+    citation_support: MetricSummary
+    invented_contact_rate: MetricSummary
+    numeric_grounding: MetricSummary
+    required_fact_coverage: MetricSummary
+    semantic_similarity: MetricSummary
+    llm_judge_faithfulness: MetricSummary | None = None
+    unsafe_answer_rate: MetricSummary | None = None
+    refusal_reason_accuracy: MetricSummary | None = None
+    sample_size: int = 0
+
+
+class EvalErrorCase(BaseModel):
+    case_id: str
+    language: str
+    type: str
+    question: str
+    reason_code: Literal[
+        "retrieval_miss",
+        "wrong_abstention",
+        "bad_citation",
+        "language_fallback",
+        "validation_failure",
+    ]
+    details: str
+    retrieved_chunk_ids: list[str] = Field(default_factory=list)
+    gold_chunk_id: str | None = None
+    predicted_status: str | None = None
+    expected_status: str | None = None
+
+
+class ExperimentRunReport(BaseModel):
+    run_id: str
+    timestamp: str
+    config: dict[str, Any]
+    config_hash: str
+    split: str
+    sample_size: int
+    excluded_unreviewed_count: int = 0
+    retrieval_overall: RetrievalMetricsReport
+    retrieval_by_language: dict[str, RetrievalMetricsReport]
+    answer_overall: AnswerMetricsReport | None = None
+    answer_by_language: dict[str, AnswerMetricsReport] = Field(default_factory=dict)
+    latency_p50_ms: float = 0.0
+    latency_p95_ms: float = 0.0
+    worst_cases: list[EvalErrorCase] = Field(default_factory=list)
+    abstention_threshold_sweep: dict[str, dict[str, float]] = Field(default_factory=dict)
+

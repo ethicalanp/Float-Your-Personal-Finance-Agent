@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 DocumentStatus = Literal["draft", "processing", "review", "published", "superseded", "archived"]
-DocType = Literal["advisory", "sop", "guideline", "circular", "discussion_paper", "report", "fixture"]
+DocType = Literal["advisory", "sop", "guideline", "circular", "discussion_paper", "report", "fixture", "literacy"]
 Language = Literal["en", "ml", "hi", "manglish", "mixed", "und"]
 
 

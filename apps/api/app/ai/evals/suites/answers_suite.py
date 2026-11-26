@@ -139,8 +139,9 @@ async def run_answers_suite(
             t0 = time.monotonic()
             q = case.question or case.inputs.get("question") or ""
 
-            # If using FakeProvider, enqueue appropriate structured mock for cases that reach LLM
+            # If using FakeProvider, clear any previous unconsumed mock and enqueue for current case
             if fake_provider is not None:
+                fake_provider.clear()
                 if case.type == "answerable":
                     kw = case.must_contain[0] if case.must_contain else "official rules"
                     text = f"According to regulatory standards, {kw} are required [E1]."
