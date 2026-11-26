@@ -9,6 +9,7 @@ import {
   CreditCard,
   MessageSquare,
   Settings,
+  User,
   LogOut,
   Eye,
   EyeOff,
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/borrow", label: "Borrow", icon: CreditCard },
   { href: "/assistant", label: "Assistant", icon: MessageSquare },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/profile", label: "Profile", icon: User },
 ];
 
 export default function AppNav() {
