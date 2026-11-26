@@ -1,0 +1,33 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="col-12 col-md-8 offset-md-2">
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h3 class="card-title m-0">Revealed User Email Address</h3>
+      <span class="badge bg-danger text-white">Privileged Access Audited</span>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-warning mb-3">
+        <i class="fa-solid fa-triangle-exclamation me-2"></i>
+        This unmasked email disclosure has been recorded in the permanent audit trail with your admin ID and timestamp.
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label text-muted">User ID</label>
+        <div class="form-control-plaintext font-monospace">{{ user_id }}</div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label text-muted">Full Email Address</label>
+        <div class="form-control-plaintext fs-2 font-weight-bold text-primary">{{ email }}</div>
+      </div>
+
+      <div class="mt-4">
+        <a href="{{ back_url }}" class="btn btn-secondary">
+          <i class="fa-solid fa-arrow-left me-2"></i>Back to User Details
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
