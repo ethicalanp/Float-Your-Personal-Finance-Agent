@@ -75,3 +75,15 @@ If a file was already committed to Git in past commits:
 - Do NOT rewrite published Git history (`git filter-repo` / `git rebase`).
 - Remove from HEAD with `git rm --cached`, commit the removal, and track via DVC.
 - If proprietary or sensitive data was committed, coordinate with the repository owner to purge history on a maintenance window.
+
+> [!NOTE]
+> `python -m dvc pull` will not work until a remote is added in `.dvc/config.local` (see **Switching Remotes** above).
+
+---
+
+## Branch Merge-Order & CI Parity Rule
+- **Merge Order**: `feature/backend-auth` → `feature/web-app` → `feature/admin-panel` (already in `origin/develop` via PR #29) → `feature/ai-literacy-dvc`.
+- Before pushing each branch:
+  1. Update from the latest `origin/develop` using `git merge origin/develop` (not rebase).
+  2. Keep Alembic migrations as a **single linear head** (repoint the later migration's `down_revision` to the current head).
+  3. Run `scripts\ci_local.cmd` (and `npm test` + `npm run build` for `feature/web-app`).
