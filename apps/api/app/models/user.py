@@ -169,6 +169,22 @@ class AuthAuditLog(Base):
     metadata_json: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    @property
+    def last_login_at(self) -> datetime | None:
+        """User model currently does not persist last_login_at; returns None."""
+        return None
+
+    @property
+    def ai_data_processing_consent(self) -> str:
+        """Returns 'yes' if user has active AI data processing consent, else 'no'."""
+        if hasattr(self, "consents") and self.consents:
+            for c in self.consents:
+                is_ai_consent = getattr(c, "consent_type", None) == ConsentType.AI_DATA_PROCESSING
+                is_active_consent = getattr(c, "revoked_at", None) is None
+                if is_ai_consent and is_active_consent:
+                    return "yes"
+        return "no"
+
 
 class Consent(Base):
     __tablename__ = "user_consents"

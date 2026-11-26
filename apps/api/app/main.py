@@ -137,6 +137,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tags=["Authentication & Consent"],
     )
 
+    # Mount static assets (logos, branding)
+    from pathlib import Path
+
+    from starlette.staticfiles import StaticFiles
+
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        application.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    # Conditionally mount SQLAdmin internal administration panel and IP allowlist middleware
+    if settings.admin_enabled:
+        from app.admin.middleware import AdminIPAllowlistMiddleware
+        from app.admin.panel import setup_admin_panel
+
+        application.add_middleware(
+            AdminIPAllowlistMiddleware,
+            allowed_ips=settings.admin_allowed_ips,
+        )
+        setup_admin_panel(application, settings)
+
     return application
 
 

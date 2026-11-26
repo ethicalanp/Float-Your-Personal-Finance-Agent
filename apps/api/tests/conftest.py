@@ -19,6 +19,7 @@ from app.ai.rag.embedder.fake import FakeEmbedder
 from app.core.config import Settings
 from app.db.session import Base, get_db
 from app.main import create_app
+from app.models.admin import AdminUser
 from app.models.borrow import BorrowAssessment
 from app.models.conversations import Conversation, Message
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
@@ -63,6 +64,7 @@ APP_TABLES = [
     RecurringOccurrence.__table__,
     RecurringNotification.__table__,
     BorrowAssessment.__table__,
+    AdminUser.__table__,
     Conversation.__table__,
     Message.__table__,
     KnowledgeDocument.__table__,
