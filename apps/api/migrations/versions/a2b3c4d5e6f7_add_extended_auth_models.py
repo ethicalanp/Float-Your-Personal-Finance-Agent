@@ -1,7 +1,7 @@
 """Add extended auth models, session tracking, token rotation, and identities.
 
 Revision ID: a2b3c4d5e6f7
-Revises: d5e6f7a8b9c0
+Revises: e6f7a8b9c0d1
 Create Date: 2026-11-25 15:00:00.000000
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a2b3c4d5e6f7"
-down_revision = "d5e6f7a8b9c0"
+down_revision = "e6f7a8b9c0d1"
 branch_labels = None
 depends_on = None
 
