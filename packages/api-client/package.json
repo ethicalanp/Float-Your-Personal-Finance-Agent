@@ -1,0 +1,9 @@
+{
+  "name": "@float/api-client",
+  "version": "0.1.0",
+  "description": "Typed TypeScript API client for Float Personal Finance Backend",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "private": true
+}

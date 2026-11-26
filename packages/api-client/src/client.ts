@@ -1,0 +1,329 @@
+import { ApiError } from "./errors.ts";
+import type {
+  AccountResponse,
+  AssistantChatRequest,
+  AssistantChatResponse,
+  AuthCapabilitiesResponse,
+  AuthResponse,
+  BorrowAssessResponse,
+  CashFlowSummary,
+  ConsentResponse,
+  ConsentUpdateRequest,
+  ConversationPurgeResponse,
+  CreateAccountRequest,
+  KnowledgeAnswerResponse,
+  KnowledgeQuestionRequest,
+  LoginRequest,
+  RecoveryCaseCreateRequest,
+  RecoveryCaseResponse,
+  RecoveryCaseUpdateRequest,
+  RegisterRequest,
+  ScamCheckRequest,
+  ScamCheckResponse,
+  StatementUploadSummary,
+  UploadStatementRequest,
+  UserProfileResponse,
+  VerifiedContact,
+} from "./types.ts";
+
+export interface ClientConfig {
+  baseUrl?: string;
+  token?: string;
+  fetch?: typeof fetch;
+}
+
+export class FloatApiClient {
+  private baseUrl: string;
+  private token?: string;
+  private fetchFn: typeof fetch;
+
+  constructor(config: ClientConfig = {}) {
+    const rawBase =
+      config.baseUrl ||
+      (typeof process !== "undefined"
+        ? process.env.NEXT_PUBLIC_API_URL || process.env.PFA_API_URL || process.env.API_BASE_URL
+        : undefined) ||
+      "http://127.0.0.1:8000";
+    this.baseUrl = rawBase.replace(/\/+$/, "");
+    this.token = config.token;
+    this.fetchFn = config.fetch || (typeof fetch !== "undefined" ? fetch.bind(globalThis) : (null as unknown as typeof fetch));
+  }
+
+  setToken(token: string | undefined): void {
+    this.token = token;
+  }
+
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
+    const headers = new Headers(options.headers || {});
+
+    if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    if (this.token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${this.token}`);
+    }
+
+    const response = await this.fetchFn(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = await response.text();
+      }
+      throw new ApiError(response.status, payload as any);
+    }
+
+    if (response.status === 204) {
+      return undefined as unknown as T;
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  // --- Auth & Consent ---
+  readonly auth = {
+    getCapabilities: (): Promise<AuthCapabilitiesResponse> =>
+      this.request<AuthCapabilitiesResponse>("/api/v1/auth/capabilities", {
+        method: "GET",
+      }),
+
+    register: (data: RegisterRequest): Promise<AuthResponse> =>
+      this.request<AuthResponse>("/api/v1/auth/register", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    login: (data: LoginRequest): Promise<AuthResponse> =>
+      this.request<AuthResponse>("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    google: (data: { id_token: string }): Promise<AuthResponse> =>
+      this.request<AuthResponse>("/api/v1/auth/google", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    requestPhoneOtp: (data: { phone_number: string }): Promise<{ message: string; cooldown_seconds?: number }> =>
+      this.request("/api/v1/auth/phone/request-otp", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    verifyPhoneOtp: (data: { phone_number: string; otp: string; full_name?: string }): Promise<AuthResponse> =>
+      this.request<AuthResponse>("/api/v1/auth/phone/verify-otp", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    refresh: (data: { refresh_token: string }): Promise<AuthResponse> =>
+      this.request<AuthResponse>("/api/v1/auth/refresh", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    logout: (data?: { refresh_token?: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/logout", {
+        method: "POST",
+        body: JSON.stringify(data || {}),
+      }),
+
+    logoutAll: (): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/logout-all", {
+        method: "POST",
+      }),
+
+    getSessions: (): Promise<any[]> =>
+      this.request("/api/v1/auth/sessions", {
+        method: "GET",
+      }),
+
+    revokeSession: (sessionId: string): Promise<{ message: string }> =>
+      this.request(`/api/v1/auth/sessions/${sessionId}`, {
+        method: "DELETE",
+      }),
+
+    getMethods: (): Promise<{ has_password: boolean; methods: any[] }> =>
+      this.request("/api/v1/auth/methods", {
+        method: "GET",
+      }),
+
+    linkGoogle: (data: { id_token: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/link/google", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    linkPhone: (data: { phone_number: string; otp?: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/link/phone", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    verifyLinkPhoneOtp: (data: { phone_number: string; otp: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/link/phone/verify-otp", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    setPassword: (data: { password: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/password", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    reauth: (data: { method: "password" | "google" | "phone"; password?: string; id_token?: string; phone_number?: string; otp?: string }): Promise<AuthResponse> =>
+      this.request<AuthResponse>("/api/v1/auth/reauth", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    unlinkMethod: (provider: string): Promise<{ message: string }> =>
+      this.request(`/api/v1/auth/link/${provider}`, {
+        method: "DELETE",
+      }),
+
+    requestPasswordReset: (data: { email: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/password-reset/request", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    confirmPasswordReset: (data: { token: string; new_password: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/password-reset/confirm", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    requestEmailVerification: (data?: { email?: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/verify-email/request", {
+        method: "POST",
+        body: JSON.stringify(data || {}),
+      }),
+
+    confirmEmailVerification: (data: { token: string }): Promise<{ message: string }> =>
+      this.request("/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    getProfile: (): Promise<UserProfileResponse> =>
+      this.request<UserProfileResponse>("/api/v1/auth/me", {
+        method: "GET",
+      }),
+
+    getConsent: (): Promise<ConsentResponse> =>
+      this.request<ConsentResponse>("/api/v1/auth/consent", {
+        method: "GET",
+      }),
+
+    updateConsent: (data: ConsentUpdateRequest): Promise<ConsentResponse> =>
+      this.request<ConsentResponse>("/api/v1/auth/consent", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  };
+
+  // --- Plan ---
+  readonly plan = {
+    getAccounts: (): Promise<AccountResponse[]> =>
+      this.request<AccountResponse[]>("/api/v1/plan/accounts", {
+        method: "GET",
+      }),
+
+    createAccount: (data: CreateAccountRequest): Promise<AccountResponse> =>
+      this.request<AccountResponse>("/api/v1/plan/accounts", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    uploadStatement: (data: UploadStatementRequest): Promise<StatementUploadSummary> =>
+      this.request<StatementUploadSummary>("/api/v1/plan/upload-statement", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    getCashFlow: (): Promise<CashFlowSummary> =>
+      this.request<CashFlowSummary>("/api/v1/plan/cash-flow", {
+        method: "GET",
+      }),
+  };
+
+  // --- Protect ---
+  readonly protect = {
+    checkScam: (message: string, languageHint?: "en" | "ml" | "manglish"): Promise<ScamCheckResponse> => {
+      const payload: ScamCheckRequest = { message, language_hint: languageHint };
+      return this.request<ScamCheckResponse>("/api/v1/protect/check", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getRecoveryCases: (): Promise<RecoveryCaseResponse[]> =>
+      this.request<RecoveryCaseResponse[]>("/api/v1/protect/recovery-cases", {
+        method: "GET",
+      }),
+
+    createRecoveryCase: (data: RecoveryCaseCreateRequest): Promise<RecoveryCaseResponse> =>
+      this.request<RecoveryCaseResponse>("/api/v1/protect/recovery-cases", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    updateRecoveryCase: (id: string, data: RecoveryCaseUpdateRequest): Promise<RecoveryCaseResponse> =>
+      this.request<RecoveryCaseResponse>(`/api/v1/protect/recovery-cases/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+
+    getVerifiedContacts: (): Promise<VerifiedContact[]> =>
+      this.request<VerifiedContact[]>("/api/v1/protect/verified-contacts", {
+        method: "GET",
+      }),
+
+    searchVerifiedContacts: (query: string): Promise<VerifiedContact[]> =>
+      this.request<VerifiedContact[]>(`/api/v1/protect/verified-contacts/search?q=${encodeURIComponent(query)}`, {
+        method: "GET",
+      }),
+  };
+
+  // --- Borrow ---
+  readonly borrow = {
+    assess: (): Promise<BorrowAssessResponse> =>
+      this.request<BorrowAssessResponse>("/api/v1/borrow/assess", {
+        method: "POST",
+      }),
+  };
+
+  // --- Assistant ---
+  readonly assistant = {
+    askKnowledge: (data: KnowledgeQuestionRequest): Promise<KnowledgeAnswerResponse> =>
+      this.request<KnowledgeAnswerResponse>("/api/v1/assistant/knowledge", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    chat: (data: AssistantChatRequest): Promise<AssistantChatResponse> =>
+      this.request<AssistantChatResponse>("/api/v1/assistant/chat", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    purgeConversations: (): Promise<ConversationPurgeResponse> =>
+      this.request<ConversationPurgeResponse>("/api/v1/assistant/conversations", {
+        method: "DELETE",
+        body: JSON.stringify({
+          confirm: true,
+          confirmation_phrase: "DELETE_MY_CONVERSATIONS",
+        }),
+      }),
+  };
+}

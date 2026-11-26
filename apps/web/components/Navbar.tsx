@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { landingContent } from "@/content/landing";
+import ThemeToggle from "@/components/ThemeToggle";
 import { Menu, X } from "lucide-react";
 
 export function Navbar() {
@@ -63,8 +64,9 @@ export function Navbar() {
             ))}
           </nav>
 
-          {/* Action CTAs */}
-          <div className="hidden items-center gap-4 md:flex">
+          {/* Action CTAs & Theme Toggle */}
+          <div className="hidden items-center gap-3 md:flex">
+            <ThemeToggle />
             <Link
               href={header.loginHref}
               className="text-[13.5px] font-medium text-mute transition-colors duration-200 hover:text-ink focus-visible:outline-2 focus-visible:outline-agent"
@@ -128,6 +130,10 @@ export function Navbar() {
           </div>
 
           <div className="mt-auto flex flex-col gap-3 pb-8">
+            <div className="flex items-center justify-between pb-2 border-b border-line">
+              <span className="text-xs text-mute font-medium">Appearance</span>
+              <ThemeToggle />
+            </div>
             <Link
               href={header.loginHref}
               onClick={() => setMobileMenuOpen(false)}

@@ -1,23 +1,59 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Float Landing Page Smoke Tests", () => {
+  test.beforeEach(async ({ page }) => {
+    (page as any).__cspViolations = [];
+    page.on("console", (msg) => {
+      const text = msg.text();
+      if (
+        msg.type() === "error" &&
+        (text.toLowerCase().includes("content security policy") ||
+          text.toLowerCase().includes("content-security-policy") ||
+          text.toLowerCase().includes("violates the following"))
+      ) {
+        (page as any).__cspViolations.push(`Console CSP Error: ${text}`);
+      }
+    });
+
+    await page.addInitScript(() => {
+      window.addEventListener("securitypolicyviolation", (e: SecurityPolicyViolationEvent) => {
+        (window as any).__securityPolicyViolations = (window as any).__securityPolicyViolations || [];
+        (window as any).__securityPolicyViolations.push({
+          blockedURI: e.blockedURI,
+          violatedDirective: e.violatedDirective,
+          effectiveDirective: e.effectiveDirective,
+        });
+      });
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    const windowViolations = await page.evaluate(() => (window as any).__securityPolicyViolations || []);
+    const consoleViolations = (page as any).__cspViolations || [];
+    expect(windowViolations, `SecurityPolicyViolation: ${JSON.stringify(windowViolations)}`).toHaveLength(0);
+    expect(consoleViolations, `Console CSP errors: ${consoleViolations.join("; ")}`).toHaveLength(0);
+  });
+
   test("should render the complete landing page with all mandatory sections and copy", async ({
     page,
+    isMobile,
   }) => {
     // 1. Load the landing page
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
 
     // 2. Header and Logo placeholder check
-    const logo = page.locator('[data-testid="logo-placeholder"]');
+    const logo = page.locator('[data-testid="logo-placeholder"]').first();
     await expect(logo).toBeVisible();
     await expect(logo).toContainText("Float");
 
-    // Nav Links
-    await expect(page.getByRole("link", { name: "Features" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "How it works" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Security" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "FAQ" })).toBeVisible();
+    // Nav Links (visible on desktop)
+    if (!isMobile) {
+      await expect(page.getByRole("link", { name: "Features" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "How it works" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "Security" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "FAQ" }).first()).toBeVisible();
+    }
 
     // 3. Hero Section check
     await expect(
