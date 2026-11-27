@@ -8,7 +8,7 @@
 - **Content Security Policy (CSP)**: Set via `middleware.ts` alongside `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`.
 - **Feature Flag Registry**: `lib/features.ts` gates planned features until backend endpoints are implemented.
 - **Safe Rendering (Float.ai `/chat`)**: Float.ai responses are sanitized with `SafeMarkdown` (zero `dangerouslySetInnerHTML`, raw HTML stripped). Citations strictly enforce `https://` and `rel="noopener noreferrer"`. `/assistant` permanently redirects (`308`) to `/chat`.
-- **Navigation & Profile Settings**: Top-level nav (`AppNav`) exposes Home, Plan, Recurring, Protect, Borrow, Float.ai, and Profile (with a Profile menu + section on `/profile` opening `/profile/settings`). `/settings` returns a `308` permanent redirect to `/profile/settings` via `next.config.mjs`.
+- **Navigation & Profile Settings**: Top-level nav (`AppNav`) exposes Home, Plan (hub with Budget at `/plan` and Recurring & bills at `/plan/recurring`), Protect, Borrow, Float.ai, and Profile (with a Profile menu + section on `/profile` opening `/profile/settings`). `/recurring` returns a `308` permanent redirect to `/plan/recurring` and `/settings` returns a `308` permanent redirect to `/profile/settings` via `next.config.mjs`.
 - **Disclaimers**: Mandatory indicative disclaimers on Borrow and Assistant per AGENTS.md rules.
 
 ## Core Commands

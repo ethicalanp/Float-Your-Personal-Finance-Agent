@@ -49,7 +49,7 @@ test("Accessibility - Chat & dynamic notifications have aria-live regions", () =
 });
 
 test("Accessibility - Form controls across screens have explicit accessible names", () => {
-  const screens = ["login", "signup", "protect", "home", "plan", "recurring", "profile", "profile/settings"];
+  const screens = ["login", "signup", "protect", "home", "plan", "plan/recurring", "profile", "profile/settings"];
 
   for (const screen of screens) {
     const screenPath = path.join(process.cwd(), "app", screen, "page.tsx");
@@ -79,5 +79,18 @@ test("Accessibility - WCAG AA Reduced Motion styles are defined in globals.css",
   assert.ok(
     cssContent.includes("animation-duration: 0.01ms !important"),
     "globals.css must neutralize animations when reduced-motion is requested"
+  );
+});
+
+test("Accessibility - PlanTabs uses role=tablist, role=tab, aria-selected, and arrow-key navigation", () => {
+  const tabsPath = path.join(process.cwd(), "components", "PlanTabs.tsx");
+  const tabsContent = fs.readFileSync(tabsPath, "utf-8");
+
+  assert.ok(tabsContent.includes('role="tablist"'), "PlanTabs must render role='tablist'");
+  assert.ok(tabsContent.includes('role="tab"'), "PlanTabs must render role='tab'");
+  assert.ok(tabsContent.includes("aria-selected="), "PlanTabs tabs must expose aria-selected");
+  assert.ok(
+    tabsContent.includes("ArrowRight") && tabsContent.includes("ArrowLeft"),
+    "PlanTabs must support ArrowRight and ArrowLeft keyboard navigation"
   );
 });

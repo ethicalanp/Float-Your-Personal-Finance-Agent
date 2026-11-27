@@ -100,6 +100,14 @@ export const DICTIONARY = {
       resetDefault: "Reset to 50/30/20",
       unallocated: "Unallocated",
       disclaimer: "Educational budgeting tool only — not investment advice.",
+      tabsLabel: "Plan sections",
+      budgetTab: "Budget",
+      recurringTab: "Recurring & bills",
+      dueSoonTitle: "Due soon",
+      noDueSoon: "No bills due in the next 7 days.",
+      candidatesTitle: "Recurring candidates",
+      reviewCandidates: "Review candidates",
+      viewRecurring: "View Recurring & bills",
     },
     recurring: {
       title: "Recurring Payments & Bills",
@@ -195,6 +203,14 @@ export const DICTIONARY = {
       resetDefault: "50/30/20-ലേക്ക് മാറ്റുക",
       unallocated: "ബാക്കിയുള്ളത്",
       disclaimer: "പഠന ആവശ്യങ്ങൾക്ക് മാത്രം — നിക്ഷേപ ഉപദേശമല്ല.",
+      tabsLabel: "പ്ലാൻ വിഭാഗങ്ങൾ", // needsReview
+      budgetTab: "ബജറ്റ്", // needsReview
+      recurringTab: "ആവർത്തിച്ചുള്ള പേയ്‌മെന്റുകൾ", // needsReview
+      dueSoonTitle: "ഉടൻ വരുന്നത്", // needsReview
+      noDueSoon: "അടുത്ത 7 ദിവസത്തിനുള്ളിൽ ബില്ലുകളൊന്നുമില്ല.", // needsReview
+      candidatesTitle: "കണ്ടെത്തിയ ആവർത്തിച്ചുള്ള പേയ്‌മെന്റുകൾ", // needsReview
+      reviewCandidates: "പരിശോധിക്കുക", // needsReview
+      viewRecurring: "ആവർത്തിച്ചുള്ള പേയ്‌മെന്റുകൾ കാണുക", // needsReview
     },
     // needsReview
     recurring: {
@@ -291,6 +307,14 @@ export const DICTIONARY = {
       resetDefault: "50/30/20 Reset",
       unallocated: "Unallocated",
       disclaimer: "Educational planning tool mathram — investment advice alla.",
+      tabsLabel: "Plan sections", // needsReview
+      budgetTab: "Budget", // needsReview
+      recurringTab: "Recurring & bills", // needsReview
+      dueSoonTitle: "Due soon", // needsReview
+      noDueSoon: "Adutha 7 divasathil bills onnumilla.", // needsReview
+      candidatesTitle: "Recurring candidates", // needsReview
+      reviewCandidates: "Review candidates", // needsReview
+      viewRecurring: "Recurring & bills nokkuka", // needsReview
     },
     // needsReview
     recurring: {

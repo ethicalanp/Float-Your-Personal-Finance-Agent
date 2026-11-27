@@ -125,12 +125,31 @@ test.describe("Budget Plan & Recurring Payments E2E", () => {
     );
 
     await page.goto("/plan");
+    await expect(page.locator('[data-testid="plan-tablist"]')).toBeVisible();
+    await expect(page.locator('[data-testid="plan-due-soon-strip"]')).toBeVisible();
+    await expect(page.locator('[data-testid="plan-candidates-prompt"]')).toBeVisible();
+
+    // Unsaved edits on Budget tab are preserved when switching tabs & using Back button
+    await page.fill("#budget-income", "88000");
+    await page.locator('[data-testid="tab-budget"]').focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page).toHaveURL(/\/plan\/recurring$/);
+    await expect(page.locator('[data-testid="tab-recurring"]')).toHaveAttribute("aria-selected", "true");
+    await page.goBack();
+    await expect(page).toHaveURL(/\/plan$/);
+    await expect(page.locator("#budget-income")).toHaveValue("88000");
+
     await page.fill("#budget-income", "100000");
     await page.click('button:has-text("60 / 20 / 20")');
     await page.click('[data-testid="save-budget-btn"]');
     await expect(page.locator('[role="status"]')).toContainText("saved");
 
-    await page.goto("/recurring");
+    // Verify /recurring 308 redirect -> /plan/recurring
+    const redirectRes = await page.goto("/recurring");
+    expect(redirectRes?.url()).toMatch(/\/plan\/recurring$/);
+    await expect(page).toHaveURL(/\/plan\/recurring$/);
+    await expect(page.locator('nav[aria-label="Breadcrumb"]')).toContainText("Plan");
+
     await page.fill("#rec-name", "Netflix");
     await page.fill("#rec-amount", "649");
     await page.fill("#rec-merchant", "netflix");

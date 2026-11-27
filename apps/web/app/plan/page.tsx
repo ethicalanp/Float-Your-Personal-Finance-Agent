@@ -10,10 +10,17 @@ import {
   RotateCcw,
   ArrowRight,
   Info,
+  Bell,
+  Sparkles,
 } from "lucide-react";
 import AppShell from "@/components/AppShell";
+import PlanTabs from "@/components/PlanTabs";
 import { getApiClient } from "@/lib/api";
-import type { BudgetPlanOverviewResponse } from "@float/api-client";
+import type {
+  BillRemindersResponse,
+  BudgetPlanOverviewResponse,
+  RecurringSuggestionItem,
+} from "@float/api-client";
 import {
   formatINR,
   formatISTDate,
@@ -26,8 +33,13 @@ export default function PlanPage() {
   const [lang, setLang] = useState<Language>("en");
   const [hideAmounts, setHideAmounts] = useState(false);
   const [overview, setOverview] = useState<BudgetPlanOverviewResponse | null>(null);
+  const [reminders, setReminders] = useState<BillRemindersResponse>({ due_soon: [], overdue: [] });
+  const [suggestions, setSuggestions] = useState<RecurringSuggestionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  const BUDGET_DRAFT_KEY = "float_plan_budget_draft";
 
   // Form state (INR rupees for inputs, converted to paise on submit)
   const [month, setMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
@@ -55,14 +67,52 @@ export default function PlanPage() {
     return () => window.removeEventListener("float_privacy_toggle", onPrivacy);
   }, []);
 
+  function saveBudgetDraft() {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.setItem(
+        BUDGET_DRAFT_KEY,
+        JSON.stringify({ incomeInr, extraIncomeInr, incomeMode, needsPct, wantsPct, savingsPct })
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }
+
   async function loadBudget(targetMonth?: string, preserveUnsaved = false) {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await api.plan.getBudget(targetMonth);
+      const [data, remRes, sugRes] = await Promise.all([
+        api.plan.getBudget(targetMonth),
+        api.recurring.getReminders().catch(() => ({ due_soon: [], overdue: [] })),
+        api.recurring.getSuggestions().catch(() => []),
+      ]);
       setOverview(data);
+      setReminders(remRes);
+      setSuggestions(sugRes);
       setMonth(data.month);
-      if (data.plan && !preserveUnsaved) {
+      let restored = false;
+      if (typeof window !== "undefined") {
+        const rawDraft = sessionStorage.getItem(BUDGET_DRAFT_KEY);
+        if (rawDraft) {
+          try {
+            const d = JSON.parse(rawDraft);
+            if (typeof d.incomeInr === "string") setIncomeInr(d.incomeInr);
+            if (typeof d.extraIncomeInr === "string") setExtraIncomeInr(d.extraIncomeInr);
+            if (d.incomeMode) setIncomeMode(d.incomeMode);
+            if (typeof d.needsPct === "number") setNeedsPct(d.needsPct);
+            if (typeof d.wantsPct === "number") setWantsPct(d.wantsPct);
+            if (typeof d.savingsPct === "number") setSavingsPct(d.savingsPct);
+            restored = true;
+            setDraftRestored(true);
+          } catch {
+            sessionStorage.removeItem(BUDGET_DRAFT_KEY);
+          }
+        }
+      }
+
+      if (!restored && data.plan && !preserveUnsaved) {
         setIncomeInr(String(data.plan.monthly_income_paise / 100));
         setExtraIncomeInr(String(data.plan.extra_income_paise / 100));
         setIncomeMode(data.plan.income_mode);
@@ -135,6 +185,10 @@ export default function PlanPage() {
         savings_pct: savingsPct,
         expected_version: overview?.plan?.version ?? 0,
       });
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(BUDGET_DRAFT_KEY);
+      }
+      setDraftRestored(false);
       await loadBudget(month);
       setSaveSuccess("Budget plan saved.");
     } catch (err: any) {
@@ -157,25 +211,112 @@ export default function PlanPage() {
   return (
     <AppShell>
       <div className="max-w-5xl mx-auto space-y-6 pb-16">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-mute">
+          <span className="font-medium text-ink">Plan</span>
+          <span aria-hidden="true">/</span>
+          <span>{t.budgetTab}</span>
+        </nav>
+
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             <span className="cnl-kicker">Plan</span>
             <h1 className="text-2xl sm:text-3xl font-serif font-normal text-ink mt-1">{t.title}</h1>
             <p className="text-xs sm:text-sm text-mute mt-1">{t.subtitle}</p>
           </div>
-          <Link
-            href="/recurring"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-card px-4 py-2 text-xs font-semibold text-ink hover:bg-soft"
-          >
-            <span>Manage Recurring Bills</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <PlanTabs
+            tabsLabel={t.tabsLabel}
+            budgetLabel={t.budgetTab}
+            recurringLabel={t.recurringTab}
+            onBeforeNavigate={saveBudgetDraft}
+          />
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl border border-line bg-soft/40 px-4 py-2.5 text-xs text-mute">
-          <Info className="h-4 w-4 text-accent shrink-0" />
-          <span>{t.disclaimer}</span>
-        </div>
+        <div role="tabpanel" id="panel-budget" aria-labelledby="tab-budget" className="space-y-6">
+          <div className="flex items-center gap-2 rounded-xl border border-line bg-soft/40 px-4 py-2.5 text-xs text-mute">
+            <Info className="h-4 w-4 text-accent shrink-0" />
+            <span>{t.disclaimer}</span>
+          </div>
+
+          {draftRestored && (
+            <div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-line bg-soft/60 px-4 py-2 text-xs text-ink">
+              <span>Unsaved budget edits restored.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem(BUDGET_DRAFT_KEY);
+                  setDraftRestored(false);
+                  loadBudget(month);
+                }}
+                className="font-semibold text-accent hover:underline"
+              >
+                Discard draft
+              </button>
+            </div>
+          )}
+
+          {/* Plan Overview: Due Soon Strip & Recurring Candidates Prompt */}
+          {!loading && !loadError && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <section
+                data-testid="plan-due-soon-strip"
+                className="rounded-2xl border border-line bg-card p-4 flex items-start justify-between gap-3"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-ink">
+                    <Bell className="h-4 w-4 text-accent shrink-0" />
+                    <span>{t.dueSoonTitle}</span>
+                  </div>
+                  {reminders.overdue.length === 0 && reminders.due_soon.length === 0 ? (
+                    <p className="text-xs text-mute">{t.noDueSoon}</p>
+                  ) : (
+                    <p className="text-xs text-mute">
+                      {reminders.overdue.length + reminders.due_soon.length} bill(s) upcoming — next:{" "}
+                      <span className="font-medium text-ink">
+                        {[...reminders.overdue, ...reminders.due_soon][0].name}
+                      </span>{" "}
+                      ({formatINR([...reminders.overdue, ...reminders.due_soon][0].expected_amount, { hideAmount: hideAmounts })})
+                    </p>
+                  )}
+                </div>
+                <Link
+                  href="/plan/recurring"
+                  onClick={saveBudgetDraft}
+                  className="inline-flex items-center gap-1 shrink-0 text-xs font-semibold text-accent hover:underline"
+                >
+                  <span>{t.viewRecurring}</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </section>
+
+              <section
+                data-testid="plan-candidates-prompt"
+                className="rounded-2xl border border-line bg-card p-4 flex items-start justify-between gap-3"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-ink">
+                    <Sparkles className="h-4 w-4 text-accent shrink-0" />
+                    <span>{t.candidatesTitle}</span>
+                  </div>
+                  {suggestions.length === 0 ? (
+                    <p className="text-xs text-mute">No unconfirmed recurring patterns detected yet.</p>
+                  ) : (
+                    <p className="text-xs text-mute">
+                      {suggestions.length} detected ({suggestions[0].suggested_name} ·{" "}
+                      {formatINR(suggestions[0].expected_amount, { hideAmount: hideAmounts })})
+                    </p>
+                  )}
+                </div>
+                <Link
+                  href="/plan/recurring#candidates"
+                  onClick={saveBudgetDraft}
+                  className="inline-flex items-center gap-1 shrink-0 text-xs font-semibold text-accent hover:underline"
+                >
+                  <span>{t.reviewCandidates}</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </section>
+            </div>
+          )}
 
         {loading && (
           <div data-testid="plan-skeleton" className="rounded-3xl border border-line bg-card p-6 animate-pulse space-y-4">
@@ -433,6 +574,7 @@ export default function PlanPage() {
             </section>
           </form>
         )}
+        </div>
       </div>
     </AppShell>
   );
