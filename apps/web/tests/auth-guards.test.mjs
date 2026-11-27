@@ -9,7 +9,8 @@ const PROTECTED_PREFIXES = [
   "/protect",
   "/borrow",
   "/assistant",
-  "/settings",
+  "/profile",
+  "/profile/settings",
   "/consent",
 ];
 

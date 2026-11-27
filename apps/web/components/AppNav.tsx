@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -13,7 +13,7 @@ import {
   LogOut,
   Eye,
   EyeOff,
-  Globe,
+  ChevronDown,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import ThemeToggle from "./ThemeToggle";
@@ -24,7 +24,6 @@ const NAV_ITEMS = [
   { href: "/protect", label: "Protect", icon: ShieldAlert },
   { href: "/borrow", label: "Borrow", icon: CreditCard },
   { href: "/assistant", label: "Assistant", icon: MessageSquare },
-  { href: "/settings", label: "Settings", icon: Settings },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
@@ -33,6 +32,29 @@ export default function AppNav() {
   const router = useRouter();
   const [hideAmounts, setHideAmounts] = useState(false);
   const [lang, setLang] = useState<Language>("en");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setProfileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setProfileMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   useEffect(() => {
     const isHidden = localStorage.getItem("float_hide_amounts") === "true";
@@ -90,6 +112,71 @@ export default function AppNav() {
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              if (item.href === "/profile") {
+                return (
+                  <div key={item.href} ref={profileMenuRef} className="relative flex items-center">
+                    <Link
+                      href="/profile"
+                      className={`flex items-center gap-2 rounded-l-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-soft text-ink font-semibold"
+                          : "text-mute hover:bg-soft/60 hover:text-ink"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setProfileMenuOpen((v) => !v)}
+                      aria-label="Profile menu"
+                      aria-haspopup="menu"
+                      aria-expanded={profileMenuOpen}
+                      data-testid="profile-menu-btn"
+                      className={`rounded-r-lg px-1.5 py-2 text-sm transition-colors ${
+                        isActive
+                          ? "bg-soft text-ink"
+                          : "text-mute hover:bg-soft/60 hover:text-ink"
+                      }`}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                    {profileMenuOpen && (
+                      <div
+                        role="menu"
+                        aria-label="Profile menu options"
+                        className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-line bg-card p-1.5 shadow-lg z-50"
+                      >
+                        <Link
+                          href="/profile"
+                          role="menuitem"
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                            pathname === "/profile"
+                              ? "bg-soft text-ink font-semibold"
+                              : "text-mute hover:bg-soft hover:text-ink"
+                          }`}
+                        >
+                          <User className="h-3.5 w-3.5" />
+                          <span>Profile</span>
+                        </Link>
+                        <Link
+                          href="/profile/settings"
+                          role="menuitem"
+                          data-testid="profile-menu-settings"
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                            pathname === "/profile/settings"
+                              ? "bg-soft text-ink font-semibold"
+                              : "text-mute hover:bg-soft hover:text-ink"
+                          }`}
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                          <span>Settings</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={item.href}

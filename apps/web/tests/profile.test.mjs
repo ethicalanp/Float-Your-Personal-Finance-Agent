@@ -6,19 +6,25 @@ import path from "node:path";
 test("Profile page - exists in AppNav, middleware protected routes, and supports all required states", () => {
   const navSrc = fs.readFileSync(path.join(process.cwd(), "components", "AppNav.tsx"), "utf-8");
   const mwSrc = fs.readFileSync(path.join(process.cwd(), "middleware.ts"), "utf-8");
+  const nextCfgSrc = fs.readFileSync(path.join(process.cwd(), "next.config.mjs"), "utf-8");
   const profileSrc = fs.readFileSync(path.join(process.cwd(), "app", "profile", "page.tsx"), "utf-8");
+  const settingsSrc = fs.readFileSync(path.join(process.cwd(), "app", "profile", "settings", "page.tsx"), "utf-8");
 
+  assert.ok(!navSrc.includes('href: "/settings"'), "AppNav must NOT have top-level Settings link");
   assert.ok(navSrc.includes('href: "/profile"'), "AppNav must link to /profile");
-  assert.ok(mwSrc.includes('"/profile"'), "middleware.ts must protect /profile");
+  assert.ok(navSrc.includes('href="/profile/settings"'), "AppNav profile menu must link to /profile/settings");
+  assert.ok(mwSrc.includes('"/profile"'), "middleware.ts must protect /profile and /profile/settings");
+  assert.ok(nextCfgSrc.includes('source: "/settings"') && nextCfgSrc.includes('destination: "/profile/settings"') && nextCfgSrc.includes("permanent: true"), "next.config.mjs must 308 redirect /settings to /profile/settings");
 
   // Required UI states & features
   assert.ok(profileSrc.includes("profile-skeleton"), "Must render loading skeleton state");
   assert.ok(profileSrc.includes('role="alert"'), "Must render accessible error alert");
   assert.ok(profileSrc.includes('role="status"'), "Must render status/success/grace notice");
   assert.ok(profileSrc.includes("isSubmitting.current"), "Must guard against double submit");
-  assert.ok(profileSrc.includes("deletion-grace-notice"), "Must render deletion grace notice");
-  assert.ok(profileSrc.includes("/api/me/export"), "Must wire DPDP export");
-  assert.ok(profileSrc.includes("/api/me/delete/cancel"), "Must wire deletion cancel");
+  assert.ok(profileSrc.includes('href="/profile/settings"'), "Profile page must include Settings section linking to /profile/settings");
+  assert.ok(settingsSrc.includes("deletion-grace-notice"), "Settings must render deletion grace notice");
+  assert.ok(settingsSrc.includes("/api/me/export"), "Settings must wire DPDP export");
+  assert.ok(settingsSrc.includes("/api/me/delete/cancel"), "Settings must wire deletion cancel");
 });
 
 test("GetAppPrompt - StrictMode safe initial mount guard and APK env var fallback", () => {
