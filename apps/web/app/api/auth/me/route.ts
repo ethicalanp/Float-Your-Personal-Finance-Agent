@@ -10,11 +10,15 @@ export async function GET() {
 
   try {
     const client = new FloatApiClient({ token });
-    const consent = await client.auth.getConsent();
+    const profile: any = await client.auth.getProfile();
     return NextResponse.json({
       ok: true,
-      user_id: consent.user_id,
-      consent: consent.consent,
+      user_id: profile.user_id ?? profile.id,
+      consent: profile.consent ?? {
+        terms_accepted: Boolean(profile.terms_accepted),
+        privacy_accepted: Boolean(profile.privacy_accepted),
+        ai_data_processing_consent: Boolean(profile.ai_data_processing_consent),
+      },
     });
   } catch (err: any) {
     const status = err.status || 401;

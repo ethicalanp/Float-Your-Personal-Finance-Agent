@@ -165,6 +165,9 @@ async function handleProxy(request: NextRequest, { params }: { params: { path: s
     });
 
     const resContentType = backendRes.headers.get("content-type") || "";
+    if (backendRes.status === 204 || backendRes.status === 205 || backendRes.status === 304) {
+      return new NextResponse(null, { status: backendRes.status });
+    }
     if (resContentType.includes("text/event-stream") && backendRes.body) {
       return new Response(backendRes.body, {
         status: backendRes.status,
