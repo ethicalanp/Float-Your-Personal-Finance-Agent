@@ -77,7 +77,7 @@ test("SocialButton - Demo renders Google, Apple, and Phone without GitHub", () =
 });
 
 test("Settings - Sign-in methods and active sessions support full lifecycle", () => {
-  const settingsSrc = fs.readFileSync(path.join(process.cwd(), "app", "settings", "page.tsx"), "utf-8");
+  const settingsSrc = fs.readFileSync(path.join(process.cwd(), "app", "profile", "settings", "page.tsx"), "utf-8");
 
   // Last method removal protection
   assert.ok(settingsSrc.includes("isSoleMethod") || settingsSrc.includes("totalMethodsCount <= 1"), "Must prevent unlinking sole method");

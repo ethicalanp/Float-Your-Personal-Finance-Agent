@@ -93,6 +93,16 @@ export const DICTIONARY = {
       activeSessions: "Active Sessions",
       consentPreferences: "Consent Preferences",
     },
+    profile: {
+      title: "Your Profile",
+      subtitle: "Manage your display name, language, theme, and DPDP data rights.",
+      displayName: "Display Name",
+      language: "Preferred Language",
+      theme: "Theme Preference",
+      downloadData: "Download My Data",
+      deleteAccount: "Delete Account",
+      graceNotice: "Account deletion scheduled",
+    },
   },
   ml: {
     nav: {
@@ -162,6 +172,16 @@ export const DICTIONARY = {
       activeSessions: "സജീവ സെഷനുകൾ",
       consentPreferences: "അനുമതി മുൻഗണനകൾ",
     },
+    profile: {
+      title: "നിങ്ങളുടെ പ്രൊഫൈൽ", // needsReview
+      subtitle: "പേര്, ഭാഷ, തീം, DPDP ഡാറ്റ അവകാശങ്ങൾ എന്നിവ നിയന്ത്രിക്കുക.",
+      displayName: "പ്രദർശന നാമം",
+      language: "ഭാഷാ മുൻഗണന",
+      theme: "തീം മുൻഗണന",
+      downloadData: "എന്റെ ഡാറ്റ ഡൗൺലോഡ് ചെയ്യുക",
+      deleteAccount: "അക്കൗണ്ട് ഇല്ലാതാക്കുക",
+      graceNotice: "അക്കൗണ്ട് ഇല്ലാതാക്കൽ ഷെഡ്യൂൾ ചെയ്തു",
+    },
   },
   manglish: {
     nav: {
@@ -230,6 +250,16 @@ export const DICTIONARY = {
       signinMethods: "Sign-in Methods",
       activeSessions: "Active Sessions",
       consentPreferences: "Consent Preferences",
+    },
+    profile: {
+      title: "Ningalude Profile", // needsReview
+      subtitle: "Display name, language, theme, DPDP data rights manage cheyyuka.",
+      displayName: "Display Name",
+      language: "Preferred Language",
+      theme: "Theme Preference",
+      downloadData: "Ente Data Download Cheyyuka",
+      deleteAccount: "Account Delete Cheyyuka",
+      graceNotice: "Account deletion schedule cheythu",
     },
   },
 } as const;

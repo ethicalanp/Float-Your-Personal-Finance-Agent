@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
-    "test": "node --test tests/smoke-verify.mjs tests/api-client.test.mjs tests/auth-bff.test.mjs tests/feature-flags-i18n.test.mjs tests/auth-capabilities.test.mjs tests/api-errors-msw.test.mjs tests/auth-guards.test.mjs tests/security-streaming-upload.test.mjs tests/i18n-completeness.test.mjs tests/component-states.test.mjs tests/axe-accessibility.test.mjs tests/auth-ui-enhancements.test.mjs tests/auth-login-flow.test.mjs tests/google-signin.test.mjs",
+    "test": "node --test tests/smoke-verify.mjs tests/api-client.test.mjs tests/auth-bff.test.mjs tests/feature-flags-i18n.test.mjs tests/auth-capabilities.test.mjs tests/api-errors-msw.test.mjs tests/auth-guards.test.mjs tests/security-streaming-upload.test.mjs tests/i18n-completeness.test.mjs tests/component-states.test.mjs tests/axe-accessibility.test.mjs tests/auth-ui-enhancements.test.mjs tests/auth-login-flow.test.mjs tests/google-signin.test.mjs tests/profile.test.mjs",
     "test:smoke": "playwright test",
     "test:e2e": "playwright test"
   },

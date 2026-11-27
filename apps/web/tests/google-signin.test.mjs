@@ -7,7 +7,7 @@ test("GoogleSignInButton - uses next/script, renderButton, theme/locale re-rende
   const compSrc = fs.readFileSync(path.join(process.cwd(), "components", "GoogleSignInButton.tsx"), "utf-8");
   const loginSrc = fs.readFileSync(path.join(process.cwd(), "app", "login", "page.tsx"), "utf-8");
   const signupSrc = fs.readFileSync(path.join(process.cwd(), "app", "signup", "page.tsx"), "utf-8");
-  const settingsSrc = fs.readFileSync(path.join(process.cwd(), "app", "settings", "page.tsx"), "utf-8");
+  const settingsSrc = fs.readFileSync(path.join(process.cwd(), "app", "profile", "settings", "page.tsx"), "utf-8");
 
   // Uses next/script afterInteractive and google.accounts.id.renderButton
   assert.ok(compSrc.includes('from "next/script"'), "Must load GIS via next/script");
