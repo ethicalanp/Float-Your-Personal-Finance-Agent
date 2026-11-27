@@ -37,6 +37,8 @@ export default function ConsentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          terms_accepted: true,
+          privacy_accepted: true,
           ai_data_processing_consent: grant,
           consent_version: "v1.0",
         }),
@@ -47,7 +49,7 @@ export default function ConsentPage() {
       }
       setGranted(grant);
       if (grant) {
-        router.push("/assistant");
+        router.push("/chat");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred");
