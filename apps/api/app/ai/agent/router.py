@@ -98,7 +98,11 @@ PERSONAL_FINANCE_PATTERNS = [
 KNOWLEDGE_PATTERNS = [
     r"\b(?:rbi|reserve bank|guideline|guidelines|rule|rules|ombudsman|dicgc|insurance|deposit)\b",
     r"\b(?:zero liability|chargeback|regulation|regulations|grievance|redressal|rights|tokenization)\b",
-    r"(?:ആർബിഐ|റിസർവ് ബാങ്ക്|നിയമം|ചട്ടം|പരാതി|പരിഹാരം|ഇൻഷുറൻസ്|അവകാശങ്ങൾ)",
+    (
+        r"\b(?:money|inflation|compound interest|simple interest|emergency fund|apr|neft|rtgs|imps|"
+        r"fixed deposit|ppf|epf|nps|savings account|credit utilization|financial literacy)\b"
+    ),
+    r"(?:ആർബിഐ|റിസർവ് ബാങ്ക്|നിയമം|ചട്ടം|പരാതി|പരിഹാരം|ഇൻഷുറൻസ്|അവകാശങ്ങൾ|പണം|പണപ്പെരുപ്പം)",
     r"\b(?:rbi|rules|rule|ombudsman|zero liability|deposit insurance|tokenization|guidelines)\b",
 ]
 
