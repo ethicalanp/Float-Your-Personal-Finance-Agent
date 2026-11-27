@@ -472,3 +472,71 @@ export interface RecurringSuggestionItem {
   confidence: "high" | "medium";
   detected_occurrences_count: number;
 }
+
+// --- Goals & Emergency Fund Types ---
+export interface GoalItemOut {
+  id: string;
+  name: string;
+  target_amount_paise: number;
+  saved_paise: number;
+  over_saved_paise: number;
+  remaining_paise: number;
+  target_date: string;
+  priority: number;
+  version: number;
+  months_remaining: number;
+  is_past_due: boolean;
+  is_funded: boolean;
+  suggested_monthly_paise: number;
+  allocated_monthly_paise: number;
+  feasible: boolean;
+  progress_pct: number;
+}
+
+export interface GoalsOverviewResponse {
+  ist_month: string;
+  budget_savings_paise?: number | null;
+  total_suggested_monthly_paise: number;
+  has_allocation_conflict: boolean;
+  shortfall_paise: number;
+  goals: GoalItemOut[];
+}
+
+export interface CreateGoalRequest {
+  name: string;
+  target_amount_paise: number;
+  saved_paise?: number;
+  target_date: string;
+  priority?: number;
+}
+
+export interface UpdateGoalRequest {
+  name?: string;
+  target_amount_paise?: number;
+  saved_paise?: number;
+  target_date?: string;
+  priority?: number;
+  expected_version?: number;
+}
+
+export interface EmergencyFundResponse {
+  ist_month: string;
+  target_months: number;
+  needs_paise: number;
+  essential_recurring_paise: number;
+  essential_monthly_paise: number;
+  target_amount_paise: number;
+  saved_paise: number;
+  liquid_accounts_paise: number;
+  effective_saved_paise: number;
+  over_saved_paise: number;
+  remaining_paise: number;
+  progress_pct: number;
+  version: number;
+}
+
+export interface UpdateEmergencyFundRequest {
+  target_months: number;
+  saved_paise: number;
+  expected_version?: number;
+}

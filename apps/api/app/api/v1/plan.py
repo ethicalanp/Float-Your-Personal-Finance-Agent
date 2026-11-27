@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -20,6 +20,7 @@ from app.models.enums import (
     TransactionSource,
     TransactionType,
 )
+from app.models.goals import EmergencyFundConfig, Goal
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import AuditTrail
 from app.models.user import User
@@ -32,6 +33,12 @@ from app.services.budget_service import (
     get_ist_month,
 )
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
+from app.services.goals_service import (
+    EmergencyFundResponse,
+    GoalsOverviewResponse,
+    compute_emergency_fund_overview,
+    compute_goals_overview,
+)
 from app.services.recurring_service import match_transaction_to_occurrence
 from app.services.statement_parser import parse_csv_statement, parse_sms_statement
 
@@ -553,3 +560,184 @@ async def upsert_budget_plan(
     await db.commit()
     await db.refresh(new_plan)
     return _serialize_budget_plan(new_plan)
+
+
+class CreateGoalRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    target_amount_paise: int = Field(..., gt=0)
+    saved_paise: int = Field(0, ge=0)
+    target_date: date
+    priority: int = Field(1, ge=1)
+
+
+class UpdateGoalRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    target_amount_paise: int | None = Field(default=None, gt=0)
+    saved_paise: int | None = Field(default=None, ge=0)
+    target_date: date | None = None
+    priority: int | None = Field(default=None, ge=1)
+    expected_version: int | None = None
+
+
+class UpdateEmergencyFundRequest(BaseModel):
+    target_months: int = Field(..., ge=0, le=36)
+    saved_paise: int = Field(0, ge=0)
+    expected_version: int | None = None
+
+
+@router.get("/goals", response_model=GoalsOverviewResponse)
+async def get_goals_endpoint(
+    month: str | None = None,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> GoalsOverviewResponse:
+    return await compute_goals_overview(db, current_user.id, month=month)
+
+
+@router.post("/goals", response_model=GoalsOverviewResponse, status_code=201)
+async def create_goal_endpoint(
+    req: CreateGoalRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> GoalsOverviewResponse:
+    goal = Goal(
+        user_id=current_user.id,
+        name=req.name.strip(),
+        target_amount_paise=req.target_amount_paise,
+        saved_paise=req.saved_paise,
+        target_date=req.target_date,
+        priority=req.priority,
+        version=1,
+    )
+    db.add(goal)
+    await db.flush()
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="goal_created",
+            resource_type="goal",
+            resource_id=str(goal.id),
+            metadata_json={"priority": goal.priority},
+        )
+    )
+    await db.commit()
+    return await compute_goals_overview(db, current_user.id)
+
+
+@router.put("/goals/{goal_id}", response_model=GoalsOverviewResponse)
+async def update_goal_endpoint(
+    goal_id: uuid.UUID,
+    req: UpdateGoalRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> GoalsOverviewResponse:
+    res = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user.id))
+    goal = res.scalar_one_or_none()
+    if goal is None:
+        raise NotFoundException("Goal not found.")
+    if req.expected_version is not None and req.expected_version != goal.version:
+        raise ConflictException("Goal was changed elsewhere. Latest version reloaded.")
+
+    if req.name is not None:
+        goal.name = req.name.strip()
+    if req.target_amount_paise is not None:
+        goal.target_amount_paise = req.target_amount_paise
+    if req.saved_paise is not None:
+        goal.saved_paise = req.saved_paise
+    if req.target_date is not None:
+        goal.target_date = req.target_date
+    if req.priority is not None:
+        goal.priority = req.priority
+    goal.version += 1
+
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="goal_updated",
+            resource_type="goal",
+            resource_id=str(goal.id),
+            metadata_json={"version": goal.version, "priority": goal.priority},
+        )
+    )
+    await db.commit()
+    return await compute_goals_overview(db, current_user.id)
+
+
+@router.delete("/goals/{goal_id}", response_model=GoalsOverviewResponse)
+async def delete_goal_endpoint(
+    goal_id: uuid.UUID,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> GoalsOverviewResponse:
+    res = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user.id))
+    goal = res.scalar_one_or_none()
+    if goal is None:
+        raise NotFoundException("Goal not found.")
+    await db.delete(goal)
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="goal_deleted",
+            resource_type="goal",
+            resource_id=str(goal_id),
+            metadata_json={},
+        )
+    )
+    await db.commit()
+    return await compute_goals_overview(db, current_user.id)
+
+
+@router.get("/emergency-fund", response_model=EmergencyFundResponse)
+async def get_emergency_fund_endpoint(
+    month: str | None = None,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> EmergencyFundResponse:
+    return await compute_emergency_fund_overview(db, current_user.id, month=month)
+
+
+@router.put("/emergency-fund", response_model=EmergencyFundResponse)
+async def update_emergency_fund_endpoint(
+    req: UpdateEmergencyFundRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> EmergencyFundResponse:
+    res = await db.execute(select(EmergencyFundConfig).where(EmergencyFundConfig.user_id == current_user.id))
+    cfg = res.scalar_one_or_none()
+    if cfg is not None:
+        if req.expected_version is not None and req.expected_version != cfg.version:
+            raise ConflictException("Emergency fund config was changed elsewhere. Latest version reloaded.")
+        cfg.target_months = req.target_months
+        cfg.saved_paise = req.saved_paise
+        cfg.version += 1
+        cfg_id = cfg.id
+        new_ver = cfg.version
+    else:
+        if req.expected_version not in (None, 0):
+            raise ConflictException("Emergency fund config was changed elsewhere. Latest version reloaded.")
+        cfg = EmergencyFundConfig(
+            user_id=current_user.id,
+            target_months=req.target_months,
+            saved_paise=req.saved_paise,
+            version=1,
+        )
+        db.add(cfg)
+        await db.flush()
+        cfg_id = cfg.id
+        new_ver = 1
+
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="emergency_fund_updated",
+            resource_type="emergency_fund",
+            resource_id=str(cfg_id),
+            metadata_json={"target_months": req.target_months, "version": new_ver},
+        )
+    )
+    await db.commit()
+    return await compute_emergency_fund_overview(db, current_user.id)

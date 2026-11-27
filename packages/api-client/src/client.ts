@@ -32,6 +32,11 @@ import type {
   UploadStatementRequest,
   UserProfileResponse,
   VerifiedContact,
+  GoalsOverviewResponse,
+  CreateGoalRequest,
+  UpdateGoalRequest,
+  EmergencyFundResponse,
+  UpdateEmergencyFundRequest,
 } from "./types.ts";
 
 export interface ClientConfig {
@@ -278,6 +283,41 @@ export class FloatApiClient {
 
     upsertBudget: (data: BudgetPlanUpsertRequest): Promise<BudgetPlanItem> =>
       this.request<BudgetPlanItem>("/api/v1/plan/budget", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
+    getGoals: (month?: string): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>(
+        `/api/v1/plan/goals${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+        { method: "GET" }
+      ),
+
+    createGoal: (data: CreateGoalRequest): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>("/api/v1/plan/goals", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    updateGoal: (goalId: string, data: UpdateGoalRequest): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>(`/api/v1/plan/goals/${goalId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
+    deleteGoal: (goalId: string): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>(`/api/v1/plan/goals/${goalId}`, {
+        method: "DELETE",
+      }),
+
+    getEmergencyFund: (month?: string): Promise<EmergencyFundResponse> =>
+      this.request<EmergencyFundResponse>(
+        `/api/v1/plan/emergency-fund${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+        { method: "GET" }
+      ),
+
+    updateEmergencyFund: (data: UpdateEmergencyFundRequest): Promise<EmergencyFundResponse> =>
+      this.request<EmergencyFundResponse>("/api/v1/plan/emergency-fund", {
         method: "PUT",
         body: JSON.stringify(data),
       }),
