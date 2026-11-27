@@ -118,7 +118,18 @@ test.describe("Float.ai Chat E2E & Screenshots", () => {
     await page.click('[data-testid="send-chat-btn"]');
     await expect(page.locator("text=Hello from Float.ai")).toBeVisible();
 
-    // 2. Network drop after stream fails -> keeps error/retry option
+    // 2. Stop button aborts in-flight reply
+    await page.route("**/api/backend/api/v1/assistant/chat/stream", async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.fulfill({ status: 501, contentType: "application/json", body: "{}" });
+    });
+    await page.fill('[data-testid="chat-composer"]', "Long streaming request");
+    await page.click('[data-testid="send-chat-btn"]');
+    await expect(page.locator('[data-testid="stop-chat-btn"]')).toBeVisible();
+    await page.click('[data-testid="stop-chat-btn"]');
+    await expect(page.locator('[data-testid="send-chat-btn"]')).toBeVisible();
+
+    // 3. Network drop mid-reply -> keeps error/retry option
     await page.route("**/api/backend/api/v1/assistant/chat/stream", (route) => route.abort("failed"));
     await page.fill('[data-testid="chat-composer"]', "Second question");
     await page.click('[data-testid="send-chat-btn"]');

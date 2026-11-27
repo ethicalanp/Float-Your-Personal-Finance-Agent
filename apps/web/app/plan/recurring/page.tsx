@@ -168,7 +168,7 @@ export default function PlanRecurringPage() {
       setStatusMsg(c.is_active ? `Paused ${c.name}.` : `Resumed ${c.name}.`);
       await loadAll();
     } catch (err: any) {
-      if (err?.status === 409) {
+      if (err?.status === 409 || /conflict|concurrently/i.test(err?.message || "")) {
         await loadAll();
         setError("This recurring payment was changed elsewhere. Latest values reloaded.");
       } else {

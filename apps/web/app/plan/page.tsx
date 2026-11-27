@@ -79,7 +79,7 @@ export default function PlanPage() {
     }
   }
 
-  async function loadBudget(targetMonth?: string) {
+  async function loadBudget(targetMonth?: string, preserveUnsaved = false) {
     setLoading(true);
     setLoadError(null);
     try {
@@ -92,7 +92,6 @@ export default function PlanPage() {
       setReminders(remRes);
       setSuggestions(sugRes);
       setMonth(data.month);
-
       let restored = false;
       if (typeof window !== "undefined") {
         const rawDraft = sessionStorage.getItem(BUDGET_DRAFT_KEY);
@@ -113,7 +112,7 @@ export default function PlanPage() {
         }
       }
 
-      if (!restored && data.plan) {
+      if (!restored && data.plan && !preserveUnsaved) {
         setIncomeInr(String(data.plan.monthly_income_paise / 100));
         setExtraIncomeInr(String(data.plan.extra_income_paise / 100));
         setIncomeMode(data.plan.income_mode);
@@ -193,7 +192,14 @@ export default function PlanPage() {
       await loadBudget(month);
       setSaveSuccess("Budget plan saved.");
     } catch (err: any) {
-      setSaveError(err?.message || "Failed to save budget plan.");
+      if (err?.status === 409 || /conflict|another tab/i.test(err?.message || "")) {
+        await loadBudget(month, true);
+        setSaveError(
+          "This budget plan was changed elsewhere. Latest version reloaded — your unsaved edits are still in the form."
+        );
+      } else {
+        setSaveError(err?.message || "Failed to save budget plan.");
+      }
     } finally {
       setSaving(false);
       isSubmitting.current = false;
