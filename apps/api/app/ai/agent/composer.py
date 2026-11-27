@@ -65,10 +65,16 @@ def build_structured_fallback(
             lines.append(f"• {f.label}: {f.value} {f.unit}{period_suffix}")
 
     if evidence_chunks:
+        top_title = evidence_chunks[0].get("title")
+        focused = [c for c in evidence_chunks if c.get("title") == top_title][:2]
+        if not focused:
+            focused = evidence_chunks[:2]
         lines.append("\nRelevant Guidelines:")
-        for idx, chunk in enumerate(evidence_chunks, 1):
+        for idx, chunk in enumerate(focused, 1):
             alias = chunk.get("alias", f"E{idx}")
-            lines.append(f"• [{alias}] {chunk.get('title', 'Guideline')}: {chunk.get('content', '')[:200]}...")
+            content = str(chunk.get("content", "")).strip()
+            snippet = content[:450] + ("..." if len(content) > 450 else "")
+            lines.append(f"• [{alias}] {chunk.get('title', 'Guideline')}: {snippet}")
 
     if not lines:
         return "The requested service is temporarily unavailable. Please try again shortly."
