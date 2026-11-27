@@ -20,6 +20,10 @@ test("Plan & Recurring pages - exist in AppNav, middleware, and support required
   assert.ok(planSrc.includes("basePaise <= 0"), "Plan must reject zero or negative income");
   assert.ok(planSrc.includes("Math.abs(unallocatedPct) > 0.01"), "Plan must disable save when percentages != 100%");
   assert.ok(planSrc.includes("expected_version"), "Plan must send expected_version for optimistic concurrency");
+  assert.ok(
+    planSrc.includes("changed elsewhere") && planSrc.includes("loadBudget(month, true)"),
+    "Plan must show changed-elsewhere message on 409, reload latest version, and preserve unsaved input"
+  );
   assert.ok(planSrc.includes("isSubmitting.current"), "Plan must guard against double submit");
   assert.ok(planSrc.includes("hideAmounts"), "Plan must respect hideAmounts privacy toggle");
 
@@ -29,4 +33,8 @@ test("Plan & Recurring pages - exist in AppNav, middleware, and support required
   assert.ok(recSrc.includes("candidates-inbox"), "Recurring must render candidates inbox");
   assert.ok(recSrc.includes("isSubmitting.current"), "Recurring must guard against double submit");
   assert.ok(recSrc.includes("hideAmounts"), "Recurring must respect hideAmounts privacy toggle");
+  assert.ok(
+    recSrc.includes("changed elsewhere") && recSrc.includes("loadAll()"),
+    "Recurring must show changed-elsewhere message on 409 and reload latest values"
+  );
 });
