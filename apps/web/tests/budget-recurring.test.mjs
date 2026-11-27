@@ -17,6 +17,9 @@ test("Plan & Recurring pages - exist in AppNav, middleware, and support required
   assert.ok(planSrc.includes("plan-skeleton"), "Plan must render loading skeleton");
   assert.ok(planSrc.includes('role="alert"'), "Plan must render error alert");
   assert.ok(planSrc.includes("unallocated-indicator"), "Plan must render unallocated indicator");
+  assert.ok(planSrc.includes("basePaise <= 0"), "Plan must reject zero or negative income");
+  assert.ok(planSrc.includes("Math.abs(unallocatedPct) > 0.01"), "Plan must disable save when percentages != 100%");
+  assert.ok(planSrc.includes("expected_version"), "Plan must send expected_version for optimistic concurrency");
   assert.ok(planSrc.includes("isSubmitting.current"), "Plan must guard against double submit");
   assert.ok(planSrc.includes("hideAmounts"), "Plan must respect hideAmounts privacy toggle");
 

@@ -340,3 +340,98 @@ async def test_matching_ambiguous_weekend_drift_duplicate_and_protect_isolation(
     )
     assert scam.status_code == 200
     assert scam.json()["analysis"]["risk_tier"] in ("MEDIUM", "HIGH", "CRITICAL", "SAFE", "LOW")
+
+
+def test_skipped_month_two_rules_matching_and_duplicate_debit(client: TestClient) -> None:
+    headers, _ = _register_and_consent(client, "edge2")
+    h_other, _ = _register_and_consent(client, "edge2_other")
+
+    # Cross-user isolation on GET /plan/budget, /plan/budget/history, /recurring/reminders
+    client.put(
+        "/api/v1/plan/budget",
+        headers=headers,
+        json={
+            "month": "2026-11",
+            "monthly_income_paise": 8_000_000,
+            "needs_pct": 50,
+            "wants_pct": 30,
+            "savings_pct": 20,
+        },
+    )
+    assert client.get("/api/v1/plan/budget?month=2026-11", headers=h_other).json()["plan"] is None
+    assert client.get("/api/v1/plan/budget/history?month=2026-11", headers=h_other).json() == []
+
+    # Two rules matching one transaction (broadband vs exact merchant keyword)
+    c1 = client.post(
+        "/api/v1/recurring/commitments",
+        headers=headers,
+        json={
+            "name": "Generic Telecom",
+            "category": "Utilities",
+            "expected_amount": 999,
+            "frequency": "monthly",
+            "due_rule_day": 28,
+            "merchant": "Airtel",
+            "merchant_keywords": ["airtel"],
+            "start_date": "2026-11-01",
+        },
+    ).json()
+    c2 = client.post(
+        "/api/v1/recurring/commitments",
+        headers=headers,
+        json={
+            "name": "Airtel Fiber Exact",
+            "category": "Utilities",
+            "expected_amount": 999,
+            "frequency": "monthly",
+            "due_rule_day": 28,
+            "merchant": "Airtel Fiber",
+            "merchant_keywords": ["airtel fiber"],
+            "start_date": "2026-11-01",
+        },
+    ).json()
+    assert c1["id"] != c2["id"]
+
+    # Skipped month in past -> reminders marks overdue/missed
+    past_c = client.post(
+        "/api/v1/recurring/commitments",
+        headers=headers,
+        json={
+            "name": "Past Gym",
+            "category": "Other",
+            "expected_amount": 1500,
+            "frequency": "monthly",
+            "due_rule_day": 1,
+            "merchant": "CultFit",
+            "start_date": "2026-09-01",
+        },
+    )
+    assert past_c.status_code == 201
+    rem = client.get("/api/v1/recurring/reminders", headers=headers).json()
+    assert len(rem["overdue"]) >= 1
+    assert any(o["mismatch_flag"] == "missed" for o in rem["overdue"])
+
+    # Duplicate debit in same period -> flags duplicate on occurrence
+    acc = client.post(
+        "/api/v1/plan/accounts",
+        headers=headers,
+        json={"name": "SBI", "account_type": "savings", "institution_name": "SBI", "account_number_mask": "****2222"},
+    ).json()
+    client.post(
+        "/api/v1/plan/upload-statement",
+        headers=headers,
+        json={
+            "account_id": acc["id"],
+            "format": "csv",
+            "content": (
+                "Date,Description,Amount,Type\n"
+                "2026-11-27,Airtel Fiber Bill 1,999,debit\n"
+                "2026-11-28,Airtel Fiber Bill 2,999,debit\n"
+            ),
+        },
+    )
+    match_res = client.post("/api/v1/recurring/match", headers=headers)
+    assert match_res.status_code == 200
+    occs = client.get("/api/v1/recurring/occurrences", headers=headers).json()
+    assert any(o["status"] == "paid" and o["match_reason"] for o in occs)
+    assert any(o["mismatch_flag"] == "duplicate" for o in occs)
