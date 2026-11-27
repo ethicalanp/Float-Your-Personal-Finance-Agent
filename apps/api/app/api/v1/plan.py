@@ -33,7 +33,11 @@ from app.services.budget_service import (
 )
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
 from app.services.recurring_service import match_transaction_to_occurrence
-from app.services.statement_parser import parse_csv_statement, parse_sms_statement
+from app.services.statement_parser import (
+    StatementParseError,
+    parse_csv_statement,
+    parse_sms_statement,
+)
 
 router = APIRouter(prefix="/plan", tags=["Plan — Personal Finance Management"])
 
@@ -169,11 +173,14 @@ async def upload_statement(
         raise PayloadTooLargeException("Statement content exceeds maximum allowed size of 10 MB.")
 
     is_sms = req.format.lower() == "sms"
-    if is_sms:
-        parsed_single = parse_sms_statement(req.content, str(account.id))
-        parsed_txs = [parsed_single] if parsed_single else []
-    else:
-        parsed_txs = parse_csv_statement(req.content, str(account.id))
+    try:
+        if is_sms:
+            parsed_single = parse_sms_statement(req.content, str(account.id))
+            parsed_txs = [parsed_single] if parsed_single else []
+        else:
+            parsed_txs = parse_csv_statement(req.content, str(account.id))
+    except StatementParseError as err:
+        raise BadRequestException(str(err)) from err
 
     if not parsed_txs:
         raise BadRequestException("Could not extract any valid transactions from the provided content.")

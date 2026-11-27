@@ -503,6 +503,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <WarpedFloatBackground>
+      <main id="main-content" tabIndex={-1} className="outline-none">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <Link href="/" aria-label="Float Home">
@@ -522,6 +523,7 @@ export default function LoginPage() {
           <LoginForm />
         </Suspense>
       </div>
+      </main>
     </WarpedFloatBackground>
   );
 }
