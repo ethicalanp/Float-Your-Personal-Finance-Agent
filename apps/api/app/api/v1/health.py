@@ -2,8 +2,11 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.db.session import get_db
 from app.services.sms_provider import Msg91SmsProvider, get_sms_provider
 
 router = APIRouter()
@@ -30,11 +33,20 @@ async def health_check() -> HealthResponse:
 async def readiness_check(
     response: Response,
     settings: Settings = Depends(get_settings),
+    db: AsyncSession = Depends(get_db),
 ) -> ReadinessResponse:
-    """Readiness probe checking subsystem configurations including SMS provider."""
+    """Readiness probe checking database connectivity and subsystem configurations."""
     checks: dict[str, Any] = {}
     is_ready = True
     failure_reasons: list[str] = []
+
+    try:
+        await db.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception:
+        is_ready = False
+        checks["database"] = "unavailable"
+        failure_reasons.append("Database connectivity check failed")
 
     # Check SMS Provider readiness
     if settings.sms_provider == "msg91":
