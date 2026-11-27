@@ -336,3 +336,139 @@ export interface ConversationPurgeResponse {
   deleted_messages_count: number;
   purged_at: string;
 }
+
+// --- Budget Plan & Recurring Types ---
+export interface BudgetPlanItem {
+  id: string;
+  month: string;
+  version: number;
+  monthly_income_paise: number;
+  extra_income_paise: number;
+  total_income_paise: number;
+  income_mode: "fixed" | "irregular_avg" | "irregular_conservative";
+  irregular_months: number;
+  needs_pct: number;
+  wants_pct: number;
+  savings_pct: number;
+  needs_paise: number;
+  wants_paise: number;
+  savings_paise: number;
+  category_mappings: Record<string, "needs" | "wants" | "savings">;
+  updated_at: string;
+}
+
+export interface BudgetPlanActuals {
+  has_transactions: boolean;
+  transaction_count: number;
+  actual_needs_paise: number;
+  actual_wants_paise: number;
+  actual_savings_paise: number;
+  recurring_needs_paise: number;
+  warnings: string[];
+}
+
+export interface BudgetPlanOverviewResponse {
+  month: string;
+  plan: BudgetPlanItem | null;
+  actuals: BudgetPlanActuals;
+  irregular_avg_paise: number;
+  presets: Record<string, { needs: number; wants: number; savings: number }>;
+  default_category_mappings: Record<string, "needs" | "wants" | "savings">;
+  educational_disclaimer: string;
+}
+
+export interface BudgetPlanUpsertRequest {
+  month?: string;
+  monthly_income_paise: number;
+  extra_income_paise?: number;
+  income_mode?: "fixed" | "irregular_avg" | "irregular_conservative";
+  irregular_months?: number;
+  needs_pct: number;
+  wants_pct: number;
+  savings_pct: number;
+  category_mappings?: Record<string, "needs" | "wants" | "savings">;
+  expected_version?: number | null;
+}
+
+export interface RecurringCommitmentItem {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string;
+  amount_type: "fixed" | "variable_band";
+  expected_amount: number;
+  min_amount: number | null;
+  max_amount: number | null;
+  frequency: "weekly" | "monthly" | "quarterly" | "yearly";
+  due_rule_day: number;
+  merchant: string | null;
+  merchant_keywords?: string[] | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  version: number;
+  is_active: boolean;
+  origin: string;
+  created_at: string;
+}
+
+export interface DeclareCommitmentRequest {
+  name: string;
+  category: string;
+  amount_type?: "fixed" | "variable_band";
+  expected_amount: number;
+  min_amount?: number | null;
+  max_amount?: number | null;
+  frequency: "weekly" | "monthly" | "quarterly" | "yearly";
+  due_rule_day: number;
+  merchant?: string | null;
+  merchant_keywords?: string[] | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  origin?: "declared" | "suggested_confirmed";
+}
+
+export interface UpdateCommitmentRequest {
+  name?: string;
+  category?: string;
+  amount_type?: "fixed" | "variable_band";
+  expected_amount?: number;
+  min_amount?: number | null;
+  max_amount?: number | null;
+  frequency?: "weekly" | "monthly" | "quarterly" | "yearly";
+  due_rule_day?: number;
+  merchant?: string | null;
+  merchant_keywords?: string[] | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_active?: boolean;
+  expected_version?: number;
+}
+
+export interface BillReminderItem {
+  occurrence_id: string;
+  commitment_id: string;
+  name: string;
+  category: string;
+  due_date: string;
+  expected_amount: number;
+  status: string;
+  days_delta: number;
+  mismatch_flag?: string | null;
+  mismatch_reason?: string | null;
+}
+
+export interface BillRemindersResponse {
+  due_soon: BillReminderItem[];
+  overdue: BillReminderItem[];
+}
+
+export interface RecurringSuggestionItem {
+  merchant: string;
+  suggested_name: string;
+  category: string;
+  expected_amount: number;
+  frequency: "monthly";
+  due_rule_day: number;
+  confidence: "high" | "medium";
+  detected_occurrences_count: number;
+}

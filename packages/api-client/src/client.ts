@@ -5,22 +5,30 @@ import type {
   AssistantChatResponse,
   AuthCapabilitiesResponse,
   AuthResponse,
+  BillRemindersResponse,
   BorrowAssessResponse,
+  BudgetPlanItem,
+  BudgetPlanOverviewResponse,
+  BudgetPlanUpsertRequest,
   CashFlowSummary,
   ConsentResponse,
   ConsentUpdateRequest,
   ConversationPurgeResponse,
   CreateAccountRequest,
+  DeclareCommitmentRequest,
   KnowledgeAnswerResponse,
   KnowledgeQuestionRequest,
   LoginRequest,
   RecoveryCaseCreateRequest,
   RecoveryCaseResponse,
   RecoveryCaseUpdateRequest,
+  RecurringCommitmentItem,
+  RecurringSuggestionItem,
   RegisterRequest,
   ScamCheckRequest,
   ScamCheckResponse,
   StatementUploadSummary,
+  UpdateCommitmentRequest,
   UploadStatementRequest,
   UserProfileResponse,
   VerifiedContact,
@@ -254,6 +262,65 @@ export class FloatApiClient {
     getCashFlow: (): Promise<CashFlowSummary> =>
       this.request<CashFlowSummary>("/api/v1/plan/cash-flow", {
         method: "GET",
+      }),
+
+    getBudget: (month?: string): Promise<BudgetPlanOverviewResponse> =>
+      this.request<BudgetPlanOverviewResponse>(
+        `/api/v1/plan/budget${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+        { method: "GET" }
+      ),
+
+    getBudgetHistory: (month?: string): Promise<BudgetPlanItem[]> =>
+      this.request<BudgetPlanItem[]>(
+        `/api/v1/plan/budget/history${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+        { method: "GET" }
+      ),
+
+    upsertBudget: (data: BudgetPlanUpsertRequest): Promise<BudgetPlanItem> =>
+      this.request<BudgetPlanItem>("/api/v1/plan/budget", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+  };
+
+  // --- Recurring ---
+  readonly recurring = {
+    listCommitments: (includePaused = true): Promise<RecurringCommitmentItem[]> =>
+      this.request<RecurringCommitmentItem[]>(
+        `/api/v1/recurring/commitments?include_paused=${includePaused}`,
+        { method: "GET" }
+      ),
+
+    createCommitment: (data: DeclareCommitmentRequest): Promise<RecurringCommitmentItem> =>
+      this.request<RecurringCommitmentItem>("/api/v1/recurring/commitments", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    updateCommitment: (id: string, data: UpdateCommitmentRequest): Promise<RecurringCommitmentItem> =>
+      this.request<RecurringCommitmentItem>(`/api/v1/recurring/commitments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+
+    deleteCommitment: (id: string): Promise<void> =>
+      this.request<void>(`/api/v1/recurring/commitments/${id}`, {
+        method: "DELETE",
+      }),
+
+    getReminders: (): Promise<BillRemindersResponse> =>
+      this.request<BillRemindersResponse>("/api/v1/recurring/reminders", {
+        method: "GET",
+      }),
+
+    getSuggestions: (): Promise<RecurringSuggestionItem[]> =>
+      this.request<RecurringSuggestionItem[]>("/api/v1/recurring/suggestions", {
+        method: "GET",
+      }),
+
+    runMatch: (): Promise<{ matched_count: number }> =>
+      this.request<{ matched_count: number }>("/api/v1/recurring/match", {
+        method: "POST",
       }),
   };
 

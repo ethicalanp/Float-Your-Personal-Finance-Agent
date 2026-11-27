@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -37,9 +38,13 @@ class RecurringCommitment(Base):
     expected_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     min_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     max_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
-    frequency: Mapped[str] = mapped_column(String(32), default="monthly", nullable=False)  # monthly, quarterly, yearly
-    due_rule_day: Mapped[int] = mapped_column(Integer, default=1, nullable=False)  # 1-31 day of month
+    frequency: Mapped[str] = mapped_column(String(32), default="monthly", nullable=False)
+    due_rule_day: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     merchant: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    merchant_keywords: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     origin: Mapped[str] = mapped_column(String(32), default="declared", nullable=False)  # declared, suggested_confirmed
     created_at: Mapped[datetime] = mapped_column(
@@ -80,6 +85,9 @@ class RecurringOccurrence(Base):
     )
     paid_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     paid_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    match_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mismatch_flag: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mismatch_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

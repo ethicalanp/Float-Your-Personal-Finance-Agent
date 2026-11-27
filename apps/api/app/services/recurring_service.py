@@ -2,9 +2,10 @@ import calendar
 import math
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +17,18 @@ from app.models.recurring import (
     RecurringOccurrence,
 )
 
+IST_TZ = ZoneInfo("Asia/Kolkata")
+
+
+def get_ist_today() -> date:
+    """Return today's date in Asia/Kolkata (IST)."""
+    return datetime.now(IST_TZ).date()
+
 
 def get_due_date_for_month(year: int, month: int, day: int) -> date:
     """Calculate valid date handling month-end bounds (e.g. Feb 28/29, April 30)."""
     max_days = calendar.monthrange(year, month)[1]
-    safe_day = min(day, max_days)
+    safe_day = min(max(day, 1), max_days)
     return date(year, month, safe_day)
 
 
@@ -31,26 +39,19 @@ def generate_schedule(
     expected_amount: Decimal,
     frequency: str = "monthly",
     start_date: date | None = None,
+    end_date: date | None = None,
     count: int = 3,
 ) -> list[RecurringOccurrence]:
-    """Generate upcoming occurrences for a commitment across given intervals (monthly, quarterly, yearly)."""
-    start = start_date or date.today()
-    occurrences = []
+    """Generate upcoming occurrences for a commitment across weekly, monthly, quarterly, or yearly intervals."""
+    start = start_date or get_ist_today()
+    occurrences: list[RecurringOccurrence] = []
     freq_lower = frequency.lower().strip()
-    month_steps = {"monthly": 1, "quarterly": 3, "yearly": 12}
-    try:
-        month_step = month_steps[freq_lower]
-    except KeyError as err:
-        raise ValueError(f"Unsupported recurring frequency: {frequency}") from err
 
-    for i in range(count):
-        # Calculate target year and month based on frequency interval
-        month_offset = start.month + (i * month_step)
-        target_year = start.year + (month_offset - 1) // 12
-        target_month = ((month_offset - 1) % 12) + 1
-
-        due = get_due_date_for_month(target_year, target_month, due_rule_day)
-        if due >= start:
+    if freq_lower == "weekly":
+        for i in range(count):
+            due = start + timedelta(days=7 * i)
+            if end_date is not None and due > end_date:
+                break
             occurrences.append(
                 RecurringOccurrence(
                     commitment_id=commitment_id,
@@ -60,8 +61,103 @@ def generate_schedule(
                     status="upcoming",
                 )
             )
+        return occurrences
+
+    month_steps = {"monthly": 1, "quarterly": 3, "yearly": 12}
+    try:
+        month_step = month_steps[freq_lower]
+    except KeyError as err:
+        raise ValueError(f"Unsupported recurring frequency: {frequency}") from err
+
+    for i in range(count + 1):
+        month_offset = start.month + (i * month_step)
+        target_year = start.year + (month_offset - 1) // 12
+        target_month = ((month_offset - 1) % 12) + 1
+
+        due = get_due_date_for_month(target_year, target_month, due_rule_day)
+        if due < start:
+            continue
+        if end_date is not None and due > end_date:
+            break
+        occurrences.append(
+            RecurringOccurrence(
+                commitment_id=commitment_id,
+                user_id=user_id,
+                due_date=due,
+                expected_amount=expected_amount,
+                status="upcoming",
+            )
+        )
+        if len(occurrences) >= count:
+            break
 
     return occurrences
+
+
+def _extract_keywords(comm: RecurringCommitment) -> list[str]:
+    kws: list[str] = []
+    if comm.merchant:
+        kws.append(comm.merchant.strip().lower())
+    if comm.merchant_keywords:
+        for kw in comm.merchant_keywords:
+            cleaned = str(kw).strip().lower()
+            if cleaned and cleaned not in kws:
+                kws.append(cleaned)
+    if not kws and comm.name:
+        kws.append(comm.name.strip().lower())
+    return [k for k in kws if k]
+
+
+def _merchant_match_score(txn: Transaction, comm: RecurringCommitment) -> tuple[int, str | None]:
+    """Return (score, matched_keyword). 0 means no match."""
+    haystack = " ".join(
+        filter(
+            None,
+            [
+                txn.normalized_merchant,
+                txn.merchant,
+                txn.description_cleaned,
+                txn.description,
+            ],
+        )
+    ).lower()
+    if not haystack:
+        return 0, None
+
+    keywords = _extract_keywords(comm)
+    best_score = 0
+    best_kw: str | None = None
+    txn_merchant_lower = (txn.normalized_merchant or txn.merchant or "").strip().lower()
+
+    for kw in keywords:
+        if txn_merchant_lower and txn_merchant_lower == kw:
+            return 100, kw
+        if kw in haystack:
+            score = 80 if len(kw) >= 4 else 60
+            if score > best_score:
+                best_score = score
+                best_kw = kw
+    return best_score, best_kw
+
+
+def _within_date_window(txn_date: date, due_date: date, window_days: int) -> tuple[bool, int]:
+    """Check date window including weekend drift (Sat/Sun due date -> Mon)."""
+    effective_max = due_date + timedelta(days=window_days)
+    if due_date.weekday() == 5:  # Saturday -> allow through Monday + window
+        effective_max = max(effective_max, due_date + timedelta(days=2 + window_days))
+    elif due_date.weekday() == 6:  # Sunday -> allow through Monday + window
+        effective_max = max(effective_max, due_date + timedelta(days=1 + window_days))
+    effective_min = due_date - timedelta(days=window_days)
+    delta = abs((txn_date - due_date).days)
+    return (effective_min <= txn_date <= effective_max), delta
+
+
+def _amount_matches(actual: Decimal, comm: RecurringCommitment, occ: RecurringOccurrence, tol_pct: Decimal) -> bool:
+    if comm.amount_type == "variable_band" and comm.min_amount is not None and comm.max_amount is not None:
+        return comm.min_amount <= actual <= comm.max_amount
+    expected = occ.expected_amount
+    tolerance = max(expected * tol_pct, Decimal("100.00"))
+    return abs(actual - expected) <= tolerance
 
 
 async def match_transaction_to_occurrence(
@@ -71,47 +167,78 @@ async def match_transaction_to_occurrence(
     date_window_days: int = 4,
     amount_tolerance_pct: Decimal = Decimal("0.05"),
 ) -> RecurringOccurrence | None:
-    """Correlate incoming transaction to an upcoming occurrence by date window and amount tolerance."""
+    """Tag a debit transaction as expected only when merchant + amount + date window (incl. weekend drift) match."""
     if transaction.transaction_type.value.lower() != "debit":
         return None
 
-    txn_date = transaction.transaction_date.date()
-    min_date = txn_date - timedelta(days=date_window_days)
-    max_date = txn_date + timedelta(days=date_window_days)
+    tx_dt = transaction.transaction_date
+    if tx_dt.tzinfo is None:
+        tx_dt = tx_dt.replace(tzinfo=timezone.utc)
+    txn_date = tx_dt.astimezone(IST_TZ).date()
+    min_date = txn_date - timedelta(days=date_window_days + 3)
+    max_date = txn_date + timedelta(days=date_window_days + 3)
 
-    # Query upcoming occurrences for this user in the date range
     stmt = (
-        select(RecurringOccurrence)
+        select(RecurringOccurrence, RecurringCommitment)
         .join(RecurringCommitment, RecurringOccurrence.commitment_id == RecurringCommitment.id)
         .where(
             RecurringOccurrence.user_id == user_id,
             RecurringCommitment.is_active.is_(True),
-            RecurringOccurrence.status == "upcoming",
             RecurringOccurrence.due_date >= min_date,
             RecurringOccurrence.due_date <= max_date,
         )
     )
     result = await db.execute(stmt)
-    candidates = result.scalars().all()
+    rows = result.all()
 
-    for occ in candidates:
-        expected = occ.expected_amount
-        actual = transaction.amount
+    scored_matches: list[tuple[tuple[int, Decimal, int], RecurringOccurrence, RecurringCommitment, str]] = []
+    for occ, comm in rows:
+        if comm.start_date and txn_date < comm.start_date:
+            continue
+        if comm.end_date and txn_date > comm.end_date:
+            continue
 
-        # Check amount match (within tolerance or within 100 INR)
-        diff = abs(actual - expected)
-        tolerance = max(expected * amount_tolerance_pct, Decimal("100.00"))
+        m_score, matched_kw = _merchant_match_score(transaction, comm)
+        if m_score == 0 or matched_kw is None:
+            continue
 
-        if diff <= tolerance:
-            # Match found! Mark occurrence paid and link transaction
-            occ.status = "paid"
-            occ.matched_transaction_id = transaction.id
-            occ.paid_date = txn_date
-            occ.paid_amount = actual
-            transaction.is_recurring = True
-            return occ
+        in_window, date_delta = _within_date_window(txn_date, occ.due_date, date_window_days)
+        if not in_window:
+            continue
 
-    return None
+        if occ.status == "paid":
+            if _amount_matches(transaction.amount, comm, occ, amount_tolerance_pct):
+                occ.mismatch_flag = "duplicate"
+                occ.mismatch_reason = f"Duplicate debit of ₹{transaction.amount:.2f} for already-paid occurrence"
+            continue
+
+        if occ.status != "upcoming":
+            continue
+
+        if not _amount_matches(transaction.amount, comm, occ, amount_tolerance_pct):
+            occ.mismatch_flag = "amount_high" if transaction.amount > occ.expected_amount else "amount_mismatch"
+            occ.mismatch_reason = f"Charged ₹{transaction.amount:.2f} vs expected ₹{occ.expected_amount:.2f}"
+            continue
+
+        amt_diff = abs(transaction.amount - occ.expected_amount)
+        scored_matches.append(((m_score, -amt_diff, -date_delta), occ, comm, matched_kw))
+
+    if not scored_matches:
+        return None
+
+    scored_matches.sort(key=lambda item: item[0], reverse=True)
+    _, best_occ, best_comm, best_kw = scored_matches[0]
+    best_occ.status = "paid"
+    best_occ.matched_transaction_id = transaction.id
+    best_occ.paid_date = txn_date
+    best_occ.paid_amount = transaction.amount
+    best_occ.match_reason = (
+        f"Matched '{best_kw}' ({best_comm.name}) within tolerance and date window"
+    )
+    best_occ.mismatch_flag = None
+    best_occ.mismatch_reason = None
+    transaction.is_recurring = True
+    return best_occ
 
 
 async def evaluate_overdue_occurrences(
@@ -121,7 +248,7 @@ async def evaluate_overdue_occurrences(
     grace_period_days: int = 3,
 ) -> list[RecurringOccurrence]:
     """Identify upcoming occurrences that passed due date + grace period without a match and mark missed."""
-    now_date = as_of or date.today()
+    now_date = as_of or get_ist_today()
     cutoff_date = now_date - timedelta(days=grace_period_days)
 
     stmt = (
@@ -139,8 +266,60 @@ async def evaluate_overdue_occurrences(
 
     for occ in overdue_list:
         occ.status = "missed"
+        occ.mismatch_flag = "missed"
+        occ.mismatch_reason = "No matching debit within grace window"
 
     return list(overdue_list)
+
+
+async def get_bill_reminders(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    as_of: date | None = None,
+    due_soon_days: int = 7,
+) -> dict[str, list[dict[str, Any]]]:
+    """Compute deterministic due_soon and overdue bill reminders in IST."""
+    today = as_of or get_ist_today()
+    soon_end = today + timedelta(days=due_soon_days)
+
+    stmt = (
+        select(RecurringOccurrence, RecurringCommitment)
+        .join(RecurringCommitment, RecurringOccurrence.commitment_id == RecurringCommitment.id)
+        .where(
+            RecurringOccurrence.user_id == user_id,
+            RecurringCommitment.is_active.is_(True),
+            RecurringOccurrence.status.in_(["upcoming", "overdue", "missed"]),
+        )
+        .order_by(RecurringOccurrence.due_date.asc())
+    )
+    res = await db.execute(stmt)
+    due_soon: list[dict[str, Any]] = []
+    overdue: list[dict[str, Any]] = []
+
+    for occ, comm in res.all():
+        item = {
+            "occurrence_id": str(occ.id),
+            "commitment_id": str(comm.id),
+            "name": comm.name,
+            "category": comm.category,
+            "due_date": occ.due_date.isoformat(),
+            "expected_amount": float(occ.expected_amount),
+            "status": "overdue" if occ.due_date < today and occ.status == "upcoming" else occ.status,
+            "days_delta": (occ.due_date - today).days,
+            "mismatch_flag": occ.mismatch_flag,
+            "mismatch_reason": occ.mismatch_reason,
+        }
+        if occ.due_date < today or occ.status in ("overdue", "missed"):
+            overdue.append(item)
+        elif today <= occ.due_date <= soon_end:
+            due_soon.append(item)
+
+    return {"due_soon": due_soon, "overdue": overdue}
+
+
+def filter_unusual_spend_transactions(transactions: list[Transaction]) -> list[Transaction]:
+    """Exclude expected recurring debits from unusual-spend and subscription-leak alerts."""
+    return [t for t in transactions if not t.is_recurring]
 
 
 async def generate_due_notifications(
@@ -225,14 +404,35 @@ async def replenish_recurring_occurrences(
         existing_due_dates = set(occ_res.scalars().all())
 
         freq_lower = comm.frequency.lower().strip()
+        effective_end = min(horizon_end, comm.end_date) if comm.end_date else horizon_end
+        effective_start = max(now_date, comm.start_date) if comm.start_date else now_date
+
+        if freq_lower == "weekly":
+            for i in range(16):
+                due = effective_start + timedelta(days=7 * i)
+                if due > effective_end:
+                    break
+                if due >= effective_start and due not in existing_due_dates:
+                    new_occ = RecurringOccurrence(
+                        commitment_id=comm.id,
+                        user_id=user_id,
+                        due_date=due,
+                        expected_amount=comm.expected_amount,
+                        status="upcoming",
+                    )
+                    db.add(new_occ)
+                    newly_created.append(new_occ)
+                    existing_due_dates.add(due)
+            continue
+
         month_steps = {"monthly": 1, "quarterly": 3, "yearly": 12}
         try:
             month_step = month_steps[freq_lower]
         except KeyError as err:
             raise ValueError(f"Unsupported recurring frequency: {comm.frequency}") from err
 
-        current_year = now_date.year
-        current_month = now_date.month
+        current_year = effective_start.year
+        current_month = effective_start.month
 
         for i in range(24):
             offset = (current_month - 1) + (i * month_step)
@@ -240,9 +440,9 @@ async def replenish_recurring_occurrences(
             target_month = (offset % 12) + 1
 
             due = get_due_date_for_month(target_year, target_month, comm.due_rule_day)
-            if due > horizon_end:
+            if due > effective_end:
                 break
-            if due >= now_date and due not in existing_due_dates:
+            if due >= effective_start and due not in existing_due_dates:
                 new_occ = RecurringOccurrence(
                     commitment_id=comm.id,
                     user_id=user_id,

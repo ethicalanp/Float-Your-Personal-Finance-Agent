@@ -4,6 +4,8 @@ import { AUTH_COOKIE_NAME } from "./lib/auth-cookie";
 
 const PROTECTED_PREFIXES = [
   "/home",
+  "/plan",
+  "/recurring",
   "/protect",
   "/borrow",
   "/assistant",
