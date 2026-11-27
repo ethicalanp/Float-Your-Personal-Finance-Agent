@@ -402,3 +402,86 @@ async def test_followup_rewriting_does_not_reuse_numbers():
     assert "50,000" not in rewritten
     assert "98765432" not in rewritten
     assert "unauthorized transaction" in rewritten.lower()
+
+
+@pytest.mark.asyncio
+async def test_soft_abstain_on_borderline_confidence_cites_known_and_offers_2_related_questions(
+    db_session, seeded_user_and_docs, fake_gateway
+):
+    """Borderline evidence triggers soft_abstain=True with citations and 2 related questions."""
+    from unittest.mock import AsyncMock
+
+    from app.ai.rag.retrieval import RetrievedChunk, RetrievedEvidence
+
+    user, doc, chunk = seeded_user_and_docs
+    fake_provider = FakeProvider()
+    gateway = fake_gateway(fake_provider)
+    embedder = FakeEmbedder()
+
+    retriever = HybridRetriever(
+        session=db_session,
+        embedder=embedder,
+        config=RetrievalConfig(min_evidence_score=0.83, soft_abstain_min_score=0.76),
+    )
+    borderline_chunk = RetrievedChunk(
+        chunk_id=str(chunk.id),
+        document_id=str(doc.id),
+        chunk_index=0,
+        title=doc.title,
+        heading_path=chunk.heading_path,
+        text=chunk.content,
+        language="en",
+        publisher=doc.publisher,
+        source_url=doc.source_url,
+        version=doc.version,
+        effective_date=doc.effective_date,
+        vector_score=0.79,
+        fused_score=0.016,
+    )
+    retriever.retrieve = AsyncMock(  # type: ignore[method-assign]
+        return_value=RetrievedEvidence(
+            chunks=[borderline_chunk],
+            top_fused_score=0.008,  # triggers borderline for FakeEmbedder (0.005 <= score < 0.01)
+            score_gap=0.0,
+            passed_min_evidence=False,
+            degraded=False,
+            degraded_reason=None,
+            timings_ms={"total_ms": 5.0},
+            config_hash="test",
+            top_vector_score=0.79,
+        )
+    )
+    service = KnowledgeAnswerService(session=db_session, retriever=retriever, gateway=gateway)
+
+    resp = await service.answer(KnowledgeQuestionRequest(question="What about UPI chargeback timelines?"), user=user)
+    assert resp.status == "insufficient_evidence"
+    assert resp.soft_abstain is True
+    assert len(resp.citations) == 1
+    assert "[E1]" in resp.answer
+    assert len(resp.related_questions) == 2
+
+
+@pytest.mark.asyncio
+async def test_hard_refusal_unchanged_with_soft_abstain_enabled(db_session, seeded_user_and_docs, fake_gateway):
+    """Hard policy refusals remain status='refused' with empty citations and soft_abstain=False."""
+    user, _, _ = seeded_user_and_docs
+    gateway = fake_gateway(FakeProvider())
+    retriever = HybridRetriever(session=db_session, embedder=FakeEmbedder(), config=RetrievalConfig())
+    service = KnowledgeAnswerService(session=db_session, retriever=retriever, gateway=gateway)
+
+    resp = await service.answer(
+        KnowledgeQuestionRequest(question="Which intraday stock should I buy tomorrow?"),
+        user=user,
+    )
+    assert resp.status == "refused"
+    assert resp.soft_abstain is False
+    assert resp.citations == []
+    assert resp.related_questions == []
+
+
+def test_per_language_threshold_config():
+    cfg = RetrievalConfig(min_evidence_score=0.83, language_thresholds=(("ml", 0.79), ("manglish", 0.81)))
+    assert cfg.threshold_for_language("ml") == 0.79
+    assert cfg.threshold_for_language("manglish") == 0.81
+    assert cfg.threshold_for_language("en") == 0.83
+    assert cfg.threshold_for_language(None) == 0.83

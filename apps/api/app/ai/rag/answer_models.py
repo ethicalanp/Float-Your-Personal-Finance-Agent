@@ -69,3 +69,5 @@ class KnowledgeAnswerResponse(BaseModel):
     model: str
     provider: str
     validation_failures: list[str] = Field(default_factory=list)
+    soft_abstain: bool = False
+    related_questions: list[str] = Field(default_factory=list)
