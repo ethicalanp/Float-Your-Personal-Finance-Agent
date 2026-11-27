@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   PieChart,
-  Repeat,
   ShieldAlert,
   CreditCard,
   MessageSquare,
@@ -24,7 +23,6 @@ import { Language, getActiveLanguage, setActiveLanguage } from "@/lib/i18n";
 const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/plan", label: "Plan", icon: PieChart },
-  { href: "/recurring", label: "Recurring", icon: Repeat },
   { href: "/protect", label: "Protect", icon: ShieldAlert },
   { href: "/borrow", label: "Borrow", icon: CreditCard },
   { href: "/chat", label: "Float.ai", icon: MessageSquare },

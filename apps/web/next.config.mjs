@@ -14,6 +14,11 @@ const nextConfig = {
         destination: "/chat",
         permanent: true,
       },
+      {
+        source: "/recurring",
+        destination: "/plan/recurring",
+        permanent: true,
+      },
     ];
   },
 };

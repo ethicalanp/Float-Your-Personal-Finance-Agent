@@ -7,7 +7,7 @@ import path from "node:path";
 const PROTECTED_PREFIXES = [
   "/home",
   "/plan",
-  "/recurring",
+  "/plan/recurring",
   "/protect",
   "/borrow",
   "/chat",
