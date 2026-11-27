@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   ShieldCheck,
   Globe,
@@ -18,12 +19,15 @@ import {
   Laptop,
   LogOut,
   AlertCircle,
+  Download,
+  ArrowLeft,
 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { getApiClient } from "@/lib/api";
 import { FEATURES } from "@/lib/features";
 import { useTheme } from "@/components/ThemeToggle";
+import { Language, getActiveLanguage, setActiveLanguage } from "@/lib/i18n";
 
 interface AuthMethod {
   id: string;
@@ -50,7 +54,18 @@ export default function SettingsPage() {
   const [purgeError, setPurgeError] = useState<string | null>(null);
   const [confirmPhrase, setConfirmPhrase] = useState("");
   const [showPurgeModal, setShowPurgeModal] = useState(false);
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState<Language>("en");
+
+  // DPDP Data Rights state
+  const [exporting, setExporting] = useState(false);
+  const [dataRightsSuccess, setDataRightsSuccess] = useState<string | null>(null);
+  const [dataRightsError, setDataRightsError] = useState<string | null>(null);
+  const [deletionScheduledFor, setDeletionScheduledFor] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmDeleteText, setConfirmDeleteText] = useState("");
+  const [reauthPassword, setReauthPassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [capabilities, setCapabilities] = useState<{
     google: boolean;
@@ -154,11 +169,122 @@ export default function SettingsPage() {
       }
     }
 
+    setLanguage(getActiveLanguage());
     loadSettings();
     loadCapabilities();
     loadMethods();
     loadSessions();
+    fetch("/api/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        if (me?.preferred_language) {
+          setLanguage(me.preferred_language as Language);
+          setActiveLanguage(me.preferred_language as Language);
+        }
+        if (me?.deletion_scheduled_for) {
+          setDeletionScheduledFor(me.deletion_scheduled_for);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  async function handleLanguageSelect(nextLang: Language) {
+    setLanguage(nextLang);
+    setActiveLanguage(nextLang);
+    try {
+      await fetch("/api/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          preferred_language: nextLang,
+          locale: nextLang === "ml" ? "ml-IN" : "en-IN",
+        }),
+      });
+    } catch {
+      // local preference already saved
+    }
+  }
+
+  async function handleExportData() {
+    if (exporting) return;
+    setExporting(true);
+    setDataRightsError(null);
+    setDataRightsSuccess(null);
+    try {
+      const res = await fetch("/api/me/export", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error?.message || "Failed to export data.");
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "float-dpdp-export.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setDataRightsSuccess("Your DPDP data export has started downloading.");
+    } catch (err: any) {
+      setDataRightsError(err.message || "Data export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDeleteAccount(e: React.FormEvent) {
+    e.preventDefault();
+    if (deletingAccount) return;
+    if (confirmDeleteText.trim().toUpperCase() !== "DELETE") {
+      setDeleteError('Please type "DELETE" to confirm account deletion.');
+      return;
+    }
+    setDeletingAccount(true);
+    setDeleteError(null);
+    try {
+      if (reauthPassword.trim()) {
+        const reauthRes = await fetch("/api/auth/reauth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: reauthPassword }),
+        });
+        if (!reauthRes.ok) {
+          const rErr = await reauthRes.json().catch(() => null);
+          throw new Error(rErr?.error?.message || "Re-authentication failed.");
+        }
+      }
+      const res = await fetch("/api/me", { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error?.message || "Account deletion request failed.");
+      }
+      setDeletionScheduledFor(data.deletion_scheduled_for);
+      setShowDeleteModal(false);
+      setConfirmDeleteText("");
+      setReauthPassword("");
+      setDataRightsSuccess(data.message || "Account deletion scheduled.");
+    } catch (err: any) {
+      setDeleteError(err.message || "Unable to schedule deletion.");
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
+  async function handleCancelDeletion() {
+    setDataRightsError(null);
+    try {
+      const res = await fetch("/api/me/delete/cancel", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error?.message || "Could not cancel deletion.");
+      }
+      setDeletionScheduledFor(null);
+      setDataRightsSuccess("Scheduled account deletion has been cancelled.");
+    } catch (err: any) {
+      setDataRightsError(err.message || "Failed to cancel deletion.");
+    }
+  }
 
   async function handleToggleConsent() {
     setUpdatingConsent(true);
@@ -359,19 +485,27 @@ export default function SettingsPage() {
   return (
     <AppShell>
       <div className="max-w-4xl mx-auto space-y-8 pb-12">
-        {/* Header */}
-        <div>
-          <span className="cnl-kicker">Account &amp; Security Preferences</span>
-          <h1 className="text-2xl sm:text-3xl font-serif font-normal text-ink mt-2">
+        {/* Breadcrumb & Header */}
+        <div className="space-y-2">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-mute">
+            <Link href="/profile" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Profile</span>
+            </Link>
+            <span>/</span>
+            <span className="text-ink font-medium">Settings</span>
+          </nav>
+          <span className="cnl-kicker block">Account &amp; Security Preferences</span>
+          <h1 className="text-2xl sm:text-3xl font-serif font-normal text-ink mt-1">
             Settings
           </h1>
           <p className="text-xs sm:text-sm text-mute mt-1">
-            Control your authentication credentials, active sessions, privacy consents, and appearance.
+            Control your authentication credentials, active sessions, privacy consents, data rights, and appearance.
           </p>
         </div>
 
         {/* Section 1: Sign-in Methods */}
-        <div data-testid="signin-methods-section" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-4">
+        <div id="methods" data-testid="signin-methods-section" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-accent" />
@@ -670,7 +804,7 @@ export default function SettingsPage() {
         )}
 
         {/* Section 2: Active Sessions */}
-        <div data-testid="sessions-section" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-4">
+        <div id="sessions" data-testid="sessions-section" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Laptop className="h-5 w-5 text-accent" />
@@ -739,7 +873,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Section 3: Privacy & DPDP Consent */}
-        <div className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-4">
+        <div id="consent" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-accent" />
             <h3 className="text-base font-serif font-medium text-ink">Data Protection &amp; Consent</h3>
@@ -819,7 +953,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Section 4: Appearance & Theme */}
-        <div data-testid="theme-settings-section" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-3">
+        <div id="preferences" data-testid="theme-settings-section" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-3">
           <div className="flex items-center gap-2">
             <Sun className="h-5 w-5 text-accent" />
             <h3 className="text-base font-serif font-medium text-ink">Appearance & Theme</h3>
@@ -874,13 +1008,14 @@ export default function SettingsPage() {
           </p>
           <div className="pt-2 flex flex-wrap gap-2">
             {[
-              { code: "en", label: "English" },
-              { code: "ml", label: "മലയാളം (Malayalam)" },
-              { code: "manglish", label: "Manglish" },
+              { code: "en" as Language, label: "English" },
+              { code: "ml" as Language, label: "മലയാളം (Malayalam)" },
+              { code: "manglish" as Language, label: "Manglish" },
             ].map((lang) => (
               <button
                 key={lang.code}
-                onClick={() => setLanguage(lang.code)}
+                type="button"
+                onClick={() => handleLanguageSelect(lang.code)}
                 className={`rounded-xl px-4 py-2 text-xs font-medium border transition-colors ${
                   language === lang.code
                     ? "border-accent bg-accent/10 text-accent font-semibold"
@@ -891,6 +1026,135 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Section 6: DPDP Data Rights (Export & Delete Account) */}
+        <div id="data-rights" data-testid="data-rights-section" className="rounded-3xl border border-line bg-card p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <Download className="h-5 w-5 text-accent" />
+            <h3 className="text-base font-serif font-medium text-ink">DPDP Data Rights</h3>
+          </div>
+          <p className="text-xs text-mute">
+            Download a JSON copy of your personal data or schedule permanent account deletion with a 14-day grace period.
+          </p>
+
+          {dataRightsError && (
+            <div role="alert" className="rounded-xl bg-red-50 dark:bg-red-950/30 p-2.5 text-xs text-red-700 dark:text-red-300">
+              {dataRightsError}
+            </div>
+          )}
+          {dataRightsSuccess && (
+            <div role="status" className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+              {dataRightsSuccess}
+            </div>
+          )}
+
+          {deletionScheduledFor && (
+            <div
+              role="status"
+              data-testid="deletion-grace-notice"
+              className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+            >
+              <div className="text-xs text-ink">
+                <span className="font-semibold">Account deletion scheduled: </span>
+                <span>{new Date(deletionScheduledFor).toLocaleString()}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelDeletion}
+                className="rounded-lg border border-amber-600/40 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-amber-500/20"
+              >
+                Cancel Deletion
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleExportData}
+              disabled={exporting}
+              data-testid="export-data-btn"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-soft px-4 py-2.5 text-xs font-semibold text-ink hover:bg-soft/80 disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              <span>{exporting ? "Exporting..." : "Download My Data"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              data-testid="open-delete-account-btn"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/20"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete Account</span>
+            </button>
+          </div>
+
+          {showDeleteModal && (
+            <form
+              onSubmit={handleDeleteAccount}
+              data-testid="delete-account-dialog"
+              className="mt-4 rounded-xl border border-red-500/40 bg-bg p-4 space-y-3"
+            >
+              <div className="text-sm font-semibold text-red-600 dark:text-red-400">
+                Confirm Account Deletion (14-Day Grace Period)
+              </div>
+              <p className="text-xs text-mute">
+                This revokes all sessions, purges conversations, anonymizes audit logs, and schedules deletion.
+              </p>
+              {deleteError && (
+                <div role="alert" className="text-xs text-red-600 dark:text-red-400">
+                  {deleteError}
+                </div>
+              )}
+              <div>
+                <label htmlFor="delete-confirm-input" className="block text-xs font-medium text-ink mb-1">
+                  Type <code>DELETE</code> to confirm
+                </label>
+                <input
+                  id="delete-confirm-input"
+                  type="text"
+                  required
+                  value={confirmDeleteText}
+                  onChange={(e) => setConfirmDeleteText(e.target.value)}
+                  placeholder="DELETE"
+                  className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
+                />
+              </div>
+              <div>
+                <label htmlFor="delete-reauth-password" className="block text-xs font-medium text-ink mb-1">
+                  Confirm Password (Step-up Re-authentication)
+                </label>
+                <input
+                  id="delete-reauth-password"
+                  type="password"
+                  value={reauthPassword}
+                  onChange={(e) => setReauthPassword(e.target.value)}
+                  placeholder="Required if your session is older than 10 minutes"
+                  className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={deletingAccount}
+                  data-testid="confirm-delete-account-btn"
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletingAccount ? "Scheduling..." : "Schedule Deletion"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Section 6: Feature Flag Registry */}

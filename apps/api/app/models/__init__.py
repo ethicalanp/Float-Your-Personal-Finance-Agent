@@ -1,6 +1,7 @@
 from app.db.session import Base
 from app.models.admin import AdminUser
 from app.models.borrow import BorrowAssessment
+from app.models.budget import BudgetPlan
 from app.models.conversations import Conversation, Message
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.plan import Account, Transaction, TransactionImport
@@ -33,6 +34,7 @@ __all__ = [
     "AuthToken",
     "Base",
     "BorrowAssessment",
+    "BudgetPlan",
     "Consent",
     "Conversation",
     "KnowledgeChunk",

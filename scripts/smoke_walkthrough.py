@@ -139,6 +139,30 @@ def run_smoke():
     results["assistant"] = "PASS" if assistant_res.status_code == 200 and "answer" in assistant_res.json() else f"FAIL ({assistant_res.status_code}: {assistant_res.text})"
     assert assistant_res.status_code == 200, f"Assistant failed: {assistant_res.text}"
 
+    # 10. Profile & Settings (GET/PATCH /me, sessions, DPDP export, delete + cancel)
+    me_res = client.get("/api/v1/me", headers=headers)
+    assert me_res.status_code == 200, f"GET /me failed: {me_res.text}"
+    patch_res = client.patch(
+        "/api/v1/me",
+        json={"full_name": "Smoke User Updated", "preferred_language": "en", "locale": "en-IN"},
+        headers=headers,
+    )
+    assert patch_res.status_code == 200, f"PATCH /me failed: {patch_res.text}"
+    assert patch_res.json()["full_name"] == "Smoke User Updated"
+
+    sess_res = client.get("/api/v1/auth/sessions", headers=headers)
+    assert sess_res.status_code == 200, f"GET /auth/sessions failed: {sess_res.text}"
+
+    exp_res = client.post("/api/v1/me/export", headers=headers)
+    assert exp_res.status_code == 200 and "profile" in exp_res.json(), f"POST /me/export failed: {exp_res.text}"
+
+    del_res = client.delete("/api/v1/me", headers=headers)
+    assert del_res.status_code == 200 and del_res.json()["status"] == "deletion_scheduled", f"DELETE /me failed: {del_res.text}"
+
+    cancel_res = client.post("/api/v1/me/delete/cancel", headers=headers)
+    assert cancel_res.status_code == 200 and cancel_res.json()["deletion_scheduled_for"] is None, f"POST /me/delete/cancel failed: {cancel_res.text}"
+    results["profile_and_settings"] = "PASS"
+
     print("\n=== SMOKE WALKTHROUGH RESULTS ===")
     for step, outcome in results.items():
         print(f"  {step}: {outcome}")

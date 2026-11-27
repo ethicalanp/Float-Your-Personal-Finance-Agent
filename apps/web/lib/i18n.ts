@@ -93,6 +93,31 @@ export const DICTIONARY = {
       activeSessions: "Active Sessions",
       consentPreferences: "Consent Preferences",
     },
+    plan: {
+      title: "Monthly Budget Plan",
+      subtitle: "Allocate your monthly take-home income across Needs, Wants, and Savings (educational only).",
+      savePlan: "Save Budget Plan",
+      resetDefault: "Reset to 50/30/20",
+      unallocated: "Unallocated",
+      disclaimer: "Educational budgeting tool only — not investment advice.",
+    },
+    recurring: {
+      title: "Recurring Payments & Bills",
+      subtitle: "Track rent, EMIs, SIPs, and subscriptions with deterministic due-soon reminders.",
+      addCommitment: "Add Recurring Payment",
+      dueSoon: "Due Soon & Overdue",
+      candidatesInbox: "Detected Candidates",
+    },
+    profile: {
+      title: "Your Profile",
+      subtitle: "Manage your display name, language, theme, and DPDP data rights.",
+      displayName: "Display Name",
+      language: "Preferred Language",
+      theme: "Theme Preference",
+      downloadData: "Download My Data",
+      deleteAccount: "Delete Account",
+      graceNotice: "Account deletion scheduled",
+    },
   },
   ml: {
     nav: {
@@ -162,6 +187,33 @@ export const DICTIONARY = {
       activeSessions: "സജീവ സെഷനുകൾ",
       consentPreferences: "അനുമതി മുൻഗണനകൾ",
     },
+    // needsReview
+    plan: {
+      title: "പ്രതിമാസ ബജറ്റ് പ്ലാൻ",
+      subtitle: "വരുമാനം ആവശ്യങ്ങൾ, ആഗ്രഹങ്ങൾ, സമ്പാദ്യം എന്നിവയിലേക്ക് വീതിക്കുക (പഠനത്തിന് മാത്രം).",
+      savePlan: "ബജറ്റ് സേവ് ചെയ്യുക",
+      resetDefault: "50/30/20-ലേക്ക് മാറ്റുക",
+      unallocated: "ബാക്കിയുള്ളത്",
+      disclaimer: "പഠന ആവശ്യങ്ങൾക്ക് മാത്രം — നിക്ഷേപ ഉപദേശമല്ല.",
+    },
+    // needsReview
+    recurring: {
+      title: "ആവർത്തിച്ചുള്ള പേയ്‌മെന്റുകൾ",
+      subtitle: "വാടക, ഇഎംഐ, എസ്ഐപി, സബ്സ്ക്രിപ്ഷനുകൾ എന്നിവ ട്രാക്ക് ചെയ്യുക.",
+      addCommitment: "പുതിയ പേയ്‌മെന്റ് ചേർക്കുക",
+      dueSoon: "ഉടൻ വരുന്നത്",
+      candidatesInbox: "കണ്ടെത്തിയ പേയ്‌മെന്റുകൾ",
+    },
+    profile: {
+      title: "നിങ്ങളുടെ പ്രൊഫൈൽ", // needsReview
+      subtitle: "പേര്, ഭാഷ, തീം, DPDP ഡാറ്റ അവകാശങ്ങൾ എന്നിവ നിയന്ത്രിക്കുക.",
+      displayName: "പ്രദർശന നാമം",
+      language: "ഭാഷാ മുൻഗണന",
+      theme: "തീം മുൻഗണന",
+      downloadData: "എന്റെ ഡാറ്റ ഡൗൺലോഡ് ചെയ്യുക",
+      deleteAccount: "അക്കൗണ്ട് ഇല്ലാതാക്കുക",
+      graceNotice: "അക്കൗണ്ട് ഇല്ലാതാക്കൽ ഷെഡ്യൂൾ ചെയ്തു",
+    },
   },
   manglish: {
     nav: {
@@ -230,6 +282,33 @@ export const DICTIONARY = {
       signinMethods: "Sign-in Methods",
       activeSessions: "Active Sessions",
       consentPreferences: "Consent Preferences",
+    },
+    // needsReview
+    plan: {
+      title: "Monthly Budget Plan",
+      subtitle: "Monthly income Needs, Wants, Savings aayi split cheyyuka (educational mathram).",
+      savePlan: "Budget Plan Save Cheyyuka",
+      resetDefault: "50/30/20 Reset",
+      unallocated: "Unallocated",
+      disclaimer: "Educational planning tool mathram — investment advice alla.",
+    },
+    // needsReview
+    recurring: {
+      title: "Recurring Payments & Bills",
+      subtitle: "Rent, EMI, SIP, subscriptions reminders track cheyyuka.",
+      addCommitment: "Recurring Payment Add Cheyyuka",
+      dueSoon: "Due Soon & Overdue",
+      candidatesInbox: "Detected Candidates",
+    },
+    profile: {
+      title: "Ningalude Profile", // needsReview
+      subtitle: "Display name, language, theme, DPDP data rights manage cheyyuka.",
+      displayName: "Display Name",
+      language: "Preferred Language",
+      theme: "Theme Preference",
+      downloadData: "Ente Data Download Cheyyuka",
+      deleteAccount: "Account Delete Cheyyuka",
+      graceNotice: "Account deletion schedule cheythu",
     },
   },
 } as const;

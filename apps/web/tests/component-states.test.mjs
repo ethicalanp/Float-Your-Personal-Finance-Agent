@@ -58,7 +58,7 @@ test("Theme System - Synchronous blocking script in <head> prevents theme flash"
 test("Theme System - Controls exist on Navbar, AppNav, and Settings", () => {
   const navContent = fs.readFileSync(path.join(process.cwd(), "components", "Navbar.tsx"), "utf-8");
   const appNavContent = fs.readFileSync(path.join(process.cwd(), "components", "AppNav.tsx"), "utf-8");
-  const settingsContent = fs.readFileSync(path.join(process.cwd(), "app", "settings", "page.tsx"), "utf-8");
+  const settingsContent = fs.readFileSync(path.join(process.cwd(), "app", "profile", "settings", "page.tsx"), "utf-8");
 
   assert.ok(navContent.includes("<ThemeToggle"), "Landing Navbar must include ThemeToggle");
   assert.ok(appNavContent.includes("<ThemeToggle"), "AppNav must include ThemeToggle");

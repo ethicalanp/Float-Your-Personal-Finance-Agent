@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = 30
     password_reset_token_expire_minutes: int = 15
     email_verification_token_expire_hours: int = 24
+    account_deletion_grace_days: int = 14
     internal_metrics_token: SecretStr | None = None
     borrow_model_path: str | None = None
     enable_synthetic_ml_demos: bool = False

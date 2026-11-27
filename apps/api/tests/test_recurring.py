@@ -72,13 +72,25 @@ def test_schedule_frequency_intervals() -> None:
     assert y_occs[1].due_date == date(2027, 3, 10)
     assert y_occs[2].due_date == date(2028, 3, 10)
 
+    # Weekly: step by 7 days
+    w_occs = generate_schedule(
+        commitment_id=c_id,
+        user_id=u_id,
+        due_rule_day=1,
+        expected_amount=Decimal("500.00"),
+        frequency="weekly",
+        start_date=date(2026, 3, 1),
+        count=3,
+    )
+    assert [o.due_date for o in w_occs] == [date(2026, 3, 1), date(2026, 3, 8), date(2026, 3, 15)]
+
     with pytest.raises(ValueError, match="Unsupported recurring frequency"):
         generate_schedule(
             commitment_id=c_id,
             user_id=u_id,
             due_rule_day=10,
             expected_amount=Decimal("100.00"),
-            frequency="weekly",
+            frequency="biweekly",
             start_date=date(2026, 3, 1),
         )
 

@@ -6,10 +6,13 @@ import path from "node:path";
 
 const PROTECTED_PREFIXES = [
   "/home",
+  "/plan",
+  "/recurring",
   "/protect",
   "/borrow",
   "/chat",
-  "/settings",
+  "/profile",
+  "/profile/settings",
   "/consent",
 ];
 
