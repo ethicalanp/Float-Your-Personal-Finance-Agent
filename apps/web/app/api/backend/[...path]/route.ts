@@ -161,9 +161,20 @@ async function handleProxy(request: NextRequest, { params }: { params: { path: s
       method,
       headers,
       body: bodyBuffer as any,
+      signal: request.signal,
     });
 
     const resContentType = backendRes.headers.get("content-type") || "";
+    if (resContentType.includes("text/event-stream") && backendRes.body) {
+      return new Response(backendRes.body, {
+        status: backendRes.status,
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      });
+    }
+
     if (resContentType.includes("application/json")) {
       const data = await backendRes.json();
       return NextResponse.json(data, { status: backendRes.status });

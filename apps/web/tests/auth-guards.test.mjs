@@ -10,7 +10,7 @@ const PROTECTED_PREFIXES = [
   "/recurring",
   "/protect",
   "/borrow",
-  "/assistant",
+  "/chat",
   "/profile",
   "/profile/settings",
   "/consent",

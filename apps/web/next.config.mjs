@@ -9,6 +9,11 @@ const nextConfig = {
         destination: "/profile/settings",
         permanent: true,
       },
+      {
+        source: "/assistant",
+        destination: "/chat",
+        permanent: true,
+      },
     ];
   },
 };

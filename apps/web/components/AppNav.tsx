@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { href: "/recurring", label: "Recurring", icon: Repeat },
   { href: "/protect", label: "Protect", icon: ShieldAlert },
   { href: "/borrow", label: "Borrow", icon: CreditCard },
-  { href: "/assistant", label: "Assistant", icon: MessageSquare },
+  { href: "/chat", label: "Float.ai", icon: MessageSquare },
   { href: "/profile", label: "Profile", icon: User },
 ];
 

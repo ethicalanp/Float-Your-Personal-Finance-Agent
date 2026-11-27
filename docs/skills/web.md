@@ -7,8 +7,8 @@
 - **CSRF & Origin Verification**: Mutating BFF route handlers (`POST`, `PUT`, `PATCH`, `DELETE`) verify `Origin` or `Referer` header against `Host`.
 - **Content Security Policy (CSP)**: Set via `middleware.ts` alongside `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`.
 - **Feature Flag Registry**: `lib/features.ts` gates planned features until backend endpoints are implemented.
-- **Safe Rendering**: Assistant responses are sanitized with plain/formatted blocks; no raw HTML. Citations strictly enforce `https://` and `rel="noopener noreferrer"`.
-- **Navigation & Profile Settings**: Top-level nav (`AppNav`) exposes Home, Protect, Borrow, Assistant, and Profile (with a Profile menu + section on `/profile` opening `/profile/settings`). `/settings` returns a `308` permanent redirect to `/profile/settings` via `next.config.mjs`.
+- **Safe Rendering (Float.ai `/chat`)**: Float.ai responses are sanitized with `SafeMarkdown` (zero `dangerouslySetInnerHTML`, raw HTML stripped). Citations strictly enforce `https://` and `rel="noopener noreferrer"`. `/assistant` permanently redirects (`308`) to `/chat`.
+- **Navigation & Profile Settings**: Top-level nav (`AppNav`) exposes Home, Plan, Recurring, Protect, Borrow, Float.ai, and Profile (with a Profile menu + section on `/profile` opening `/profile/settings`). `/settings` returns a `308` permanent redirect to `/profile/settings` via `next.config.mjs`.
 - **Disclaimers**: Mandatory indicative disclaimers on Borrow and Assistant per AGENTS.md rules.
 
 ## Core Commands
