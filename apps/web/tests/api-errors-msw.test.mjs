@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { mapHttpError, mapNetworkError } from "../lib/errors.ts";
 
 test("Error Mapper - 401 Unauthorized maps to re-login with return_to path", () => {
-  const err = mapHttpError(401, { error: { code: "UNAUTHORIZED", request_id: "req_auth_001" } }, { currentPath: "/settings" });
+  const err = mapHttpError(401, { error: { code: "UNAUTHORIZED", request_id: "req_auth_001" } }, { currentPath: "/profile/settings" });
   assert.equal(err.status, 401);
   assert.equal(err.code, "UNAUTHORIZED");
   assert.equal(err.requestId, "req_auth_001");
-  assert.equal(err.returnTo, "/login?return_to=%2Fsettings");
+  assert.equal(err.returnTo, "/login?return_to=%2Fprofile%2Fsettings");
   assert.equal(err.canRetry, false);
 });
 

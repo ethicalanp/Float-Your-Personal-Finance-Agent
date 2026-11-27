@@ -32,10 +32,13 @@ export function GetAppPrompt() {
   };
 
   useEffect(() => {
-    // Record the first screen of the visit
+    // Record the first screen of the visit (StrictMode-safe: ignore re-runs on the same initial path)
     if (initialMountPath.current === null) {
       initialMountPath.current = pathname;
       return; // Do NOT show on the first screen of a visit
+    }
+    if (pathname === initialMountPath.current) {
+      return;
     }
 
     // Don't show if route is excluded or user stayed on the same initial path
@@ -98,7 +101,7 @@ export function GetAppPrompt() {
 
   if (!isVisible) return null;
 
-  const androidApkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL;
+  const androidApkUrl = process.env.NEXT_PUBLIC_APK_URL || process.env.NEXT_PUBLIC_ANDROID_APK_URL;
 
   return (
     <aside

@@ -44,6 +44,7 @@
 ## Consent Separation (DPDP Act 2023)
 - Explicitly record `terms` and `privacy` consent separately from `ai_data_processing` consent.
 - Version tracking: Each consent record stores `consent_type`, `consent_version`, `granted_at`, and `ip_address_mask`.
+- Profile & Data Rights (`/api/v1/me`): `GET`/`PATCH /me` manages display name (incl. Malayalam), `preferred_language`, `locale`, and `notification_preferences` (direct email/phone changes blocked). `POST /me/export` returns non-secret user data; `DELETE /me` requires step-up re-auth (`<=10 min`), revokes sessions, purges conversations, anonymizes audit logs, and schedules deletion with a configurable grace period (`POST /me/delete/cancel`).
 
 ## Telecom DLT Checklist (TRAI India) - MSG91
 Status: **NOT YET COMPLETED**
