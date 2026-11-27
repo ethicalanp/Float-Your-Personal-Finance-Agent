@@ -41,7 +41,7 @@ export default function AssistantPage() {
       sender: "assistant",
       text: "Hello! I am your Float financial assistant. You can ask me about official banking rules, fraud recovery, cybercrime helplines (such as 1930), and your cash flow.",
       status: "answered",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      timestamp: "",
     },
   ]);
   const [input, setInput] = useState("");

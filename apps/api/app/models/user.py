@@ -1,7 +1,9 @@
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -51,6 +53,20 @@ class User(Base):
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True)
+    preferred_language: Mapped[str] = mapped_column(
+        String(16), default="en", server_default=text("'en'"), nullable=False
+    )
+    locale: Mapped[str] = mapped_column(
+        String(16), default="en-IN", server_default=text("'en-IN'"), nullable=False
+    )
+    notification_preferences: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=lambda: {"security_alerts": True, "recurring_reminders": True, "product_updates": False},
+        server_default=text("'{}'"),
+        nullable=False,
+    )
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deletion_scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

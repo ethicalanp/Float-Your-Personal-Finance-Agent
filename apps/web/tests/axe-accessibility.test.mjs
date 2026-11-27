@@ -49,7 +49,7 @@ test("Accessibility - Chat & dynamic notifications have aria-live regions", () =
 });
 
 test("Accessibility - Form controls across screens have explicit accessible names", () => {
-  const screens = ["login", "signup", "protect", "home", "plan", "recurring", "settings"];
+  const screens = ["login", "signup", "protect", "home", "plan", "recurring", "profile", "profile/settings"];
 
   for (const screen of screens) {
     const screenPath = path.join(process.cwd(), "app", screen, "page.tsx");
