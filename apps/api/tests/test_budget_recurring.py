@@ -435,3 +435,76 @@ def test_skipped_month_two_rules_matching_and_duplicate_debit(client: TestClient
     occs = client.get("/api/v1/recurring/occurrences", headers=headers).json()
     assert any(o["status"] == "paid" and o["match_reason"] for o in occs)
     assert any(o["mismatch_flag"] == "duplicate" for o in occs)
+
+
+def test_recurring_amount_within_tolerance_matches_and_large_jump_flagged(client: TestClient) -> None:
+    headers, _ = _register_and_consent(client, "rtol")
+    acc = client.post(
+        "/api/v1/plan/accounts",
+        headers=headers,
+        json={
+            "name": "ICICI",
+            "account_type": "savings",
+            "institution_name": "ICICI",
+            "account_number_mask": "****3333",
+        },
+    ).json()
+
+    # 1. Amount change within ±5% tolerance (5000 -> 5150, +3%) matches as expected
+    c_ok = client.post(
+        "/api/v1/recurring/commitments",
+        headers=headers,
+        json={
+            "name": "SIP Within Tolerance",
+            "category": "SIP",
+            "expected_amount": 5000,
+            "frequency": "monthly",
+            "due_rule_day": 28,
+            "merchant": "Groww",
+            "merchant_keywords": ["groww"],
+            "start_date": "2026-11-01",
+        },
+    )
+    assert c_ok.status_code == 201
+
+    # 2. Larger jump (5000 -> 6500, +30%) is flagged as amount_high and NOT tagged expected
+    c_jump = client.post(
+        "/api/v1/recurring/commitments",
+        headers=headers,
+        json={
+            "name": "Power Bill Jump",
+            "category": "Utilities",
+            "expected_amount": 5000,
+            "frequency": "monthly",
+            "due_rule_day": 28,
+            "merchant": "KSEB",
+            "merchant_keywords": ["kseb"],
+            "start_date": "2026-11-01",
+        },
+    )
+    assert c_jump.status_code == 201
+
+    up = client.post(
+        "/api/v1/plan/upload-statement",
+        headers=headers,
+        json={
+            "account_id": acc["id"],
+            "format": "csv",
+            "content": (
+                "Date,Description,Amount,Type\n"
+                "2026-11-28,Groww Mutual Fund,5150,debit\n"
+                "2026-11-28,KSEB Electricity,6500,debit\n"
+            ),
+        },
+    )
+    assert up.status_code == 200
+
+    txs = client.get("/api/v1/plan/transactions", headers=headers).json()
+    groww_tx = [t for t in txs if "groww" in t["description"].lower()][0]
+    kseb_tx = [t for t in txs if "kseb" in t["description"].lower()][0]
+    assert groww_tx["is_recurring"] is True
+    assert kseb_tx["is_recurring"] is False
+
+    occs = client.get("/api/v1/recurring/occurrences", headers=headers).json()
+    assert any(o["commitment_id"] == c_ok.json()["id"] and o["status"] == "paid" for o in occs)
+    assert any(o["commitment_id"] == c_jump.json()["id"] and o["mismatch_flag"] == "amount_high" for o in occs)

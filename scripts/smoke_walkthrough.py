@@ -163,6 +163,87 @@ def run_smoke():
     assert cancel_res.status_code == 200 and cancel_res.json()["deletion_scheduled_for"] is None, f"POST /me/delete/cancel failed: {cancel_res.text}"
     results["profile_and_settings"] = "PASS"
 
+    # 11. Budget Plan -> Edit Split -> Add Recurring -> Upload CSV -> Tagged Expected -> Float.ai Budget Query
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    ist_today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    ist_month = ist_today.strftime("%Y-%m")
+
+    b1 = client.put(
+        "/api/v1/plan/budget",
+        headers=headers,
+        json={"month": ist_month, "monthly_income_paise": 10_000_000, "needs_pct": 50, "wants_pct": 30, "savings_pct": 20},
+    )
+    assert b1.status_code == 200, f"Budget create failed: {b1.text}"
+    results["budget_set_income"] = "PASS"
+
+    b2 = client.put(
+        "/api/v1/plan/budget",
+        headers=headers,
+        json={
+            "month": ist_month,
+            "monthly_income_paise": 10_000_000,
+            "needs_pct": 60,
+            "wants_pct": 20,
+            "savings_pct": 20,
+            "expected_version": 1,
+        },
+    )
+    assert b2.status_code == 200 and b2.json()["needs_paise"] == 6_000_000, f"Budget split edit failed: {b2.text}"
+    results["budget_edit_split"] = "PASS"
+
+    rec_add = client.post(
+        "/api/v1/recurring/commitments",
+        headers=headers,
+        json={
+            "name": "Netflix",
+            "category": "Subscriptions",
+            "expected_amount": 649,
+            "frequency": "monthly",
+            "due_rule_day": ist_today.day,
+            "merchant": "Netflix",
+            "merchant_keywords": ["netflix"],
+            "start_date": ist_today.replace(day=1).isoformat(),
+        },
+    )
+    assert rec_add.status_code == 201, f"Add recurring failed: {rec_add.text}"
+    results["recurring_add"] = "PASS"
+
+    rec_csv = f"Date,Description,Amount,Type\n{ist_today.isoformat()},Netflix India Subscription,649,debit\n"
+    rec_up = client.post(
+        "/api/v1/plan/upload-statement",
+        headers=headers,
+        json={"account_id": account_id, "format": "csv", "content": rec_csv},
+    )
+    assert rec_up.status_code == 200, f"Recurring CSV upload failed: {rec_up.text}"
+
+    txs = client.get("/api/v1/plan/transactions", headers=headers).json()
+    matched_tx = [t for t in txs if "netflix" in t["description"].lower()]
+    assert matched_tx and matched_tx[0]["is_recurring"] is True, f"Recurring tx not tagged expected: {txs}"
+    results["recurring_tagged_expected"] = "PASS"
+
+    chat_res = client.post(
+        "/api/v1/assistant/chat",
+        headers=headers,
+        json={"question": "how is my budget this month?"},
+    )
+    assert chat_res.status_code == 200, f"Float.ai chat failed: {chat_res.text}"
+    chat_body = chat_res.json()
+    assert chat_body["status"] in ("success", "insufficient_evidence", "degraded_fallback"), f"Unexpected chat status: {chat_body}"
+    facts_used = set(chat_body.get("facts_used", []))
+    assert {"budget_needs_inr", "budget_wants_inr", "budget_savings_inr"}.issubset(facts_used), (
+        f"Expected get_budget_plan facts, got {facts_used}"
+    )
+    plan_data = b2.json()
+    answer_norm = chat_body["answer"].replace(",", "")
+    for paise_key in ("needs_paise", "wants_paise", "savings_paise"):
+        inr_int = str(plan_data[paise_key] // 100)
+        assert inr_int in answer_norm, (
+            f"Expected {paise_key} ({inr_int} INR) in Float.ai answer: {chat_body['answer']}"
+        )
+    results["float_ai_budget_query"] = f"PASS (status={chat_body['status']}, facts={chat_body.get('facts_used', [])})"
+
     print("\n=== SMOKE WALKTHROUGH RESULTS ===")
     for step, outcome in results.items():
         print(f"  {step}: {outcome}")

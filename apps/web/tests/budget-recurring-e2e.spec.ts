@@ -137,4 +137,67 @@ test.describe("Budget Plan & Recurring Payments E2E", () => {
     await page.click('[data-testid="add-recurring-btn"]');
     await expect(page.locator("text=Netflix")).toBeVisible();
   });
+
+  test("409 conflict on /plan shows changed-elsewhere message, reloads latest version, and preserves unsaved input", async ({
+    page,
+  }) => {
+    let serverVersion = 1;
+    await page.route("**/api/backend/api/v1/plan/budget*", async (route) => {
+      const req = route.request();
+      if (req.method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            month: "2026-11",
+            plan: {
+              id: "bp-1",
+              month: "2026-11",
+              version: serverVersion,
+              monthly_income_paise: 6000000,
+              extra_income_paise: 0,
+              total_income_paise: 6000000,
+              income_mode: "fixed",
+              irregular_months: 3,
+              needs_pct: 50,
+              wants_pct: 30,
+              savings_pct: 20,
+              needs_paise: 3000000,
+              wants_paise: 1800000,
+              savings_paise: 1200000,
+              category_mappings: {},
+              updated_at: "2026-11-27T04:00:00Z",
+            },
+            actuals: {
+              has_transactions: false,
+              transaction_count: 0,
+              actual_needs_paise: 0,
+              actual_wants_paise: 0,
+              actual_savings_paise: 0,
+              recurring_needs_paise: 0,
+              warnings: [],
+            },
+            irregular_avg_paise: 0,
+            presets: {},
+            default_category_mappings: {},
+            educational_disclaimer: "Educational only.",
+          }),
+        });
+      } else if (req.method() === "PUT") {
+        serverVersion = 2;
+        await route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "CONFLICT", message: "Budget plan was modified elsewhere." } }),
+        });
+      }
+    });
+
+    await page.goto("/plan");
+    await page.fill("#budget-income", "95000");
+    await page.click('[data-testid="save-budget-btn"]');
+    await expect(page.getByRole("alert").filter({ hasText: "changed elsewhere" })).toBeVisible();
+    await expect(page.locator("#budget-income")).toHaveValue("95000");
+    await expect(page.locator("text=v2")).toBeVisible();
+  });
 });
