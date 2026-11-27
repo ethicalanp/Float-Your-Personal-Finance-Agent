@@ -260,7 +260,7 @@ class IntentRouter:
             messages=[LLMMessage(role="user", content=prompt)],
             response_schema=LLMRouterOutput.model_json_schema(),
             temperature=0.0,
-            max_output_tokens=150,
+            max_output_tokens=1500,
             prompt_version="router_v1",
             data_class="demo",
         )
