@@ -29,7 +29,7 @@ test("Accessibility - Skip to main content link exists and targets #main-content
 });
 
 test("Accessibility - Chat & dynamic notifications have aria-live regions", () => {
-  const assistantPath = path.join(process.cwd(), "app", "assistant", "page.tsx");
+  const assistantPath = path.join(process.cwd(), "app", "chat", "page.tsx");
   const assistantContent = fs.readFileSync(assistantPath, "utf-8");
   assert.ok(
     assistantContent.includes('aria-live="polite"'),

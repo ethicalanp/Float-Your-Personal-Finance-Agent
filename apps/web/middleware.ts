@@ -6,7 +6,7 @@ const PROTECTED_PREFIXES = [
   "/home",
   "/protect",
   "/borrow",
-  "/assistant",
+  "/chat",
   "/settings",
   "/consent",
 ];

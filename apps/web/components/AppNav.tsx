@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/protect", label: "Protect", icon: ShieldAlert },
   { href: "/borrow", label: "Borrow", icon: CreditCard },
-  { href: "/assistant", label: "Assistant", icon: MessageSquare },
+  { href: "/chat", label: "Float.ai", icon: MessageSquare },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

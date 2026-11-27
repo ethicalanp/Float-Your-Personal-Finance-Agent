@@ -1,11 +1,13 @@
+import json
 import logging
 import time
 import uuid
+from collections.abc import AsyncIterator
 from secrets import compare_digest
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Request, Response
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,10 +25,12 @@ from app.ai.rag.answer_models import KnowledgeAnswerResponse, KnowledgeQuestionR
 from app.ai.rag.dependencies import get_embedder, get_knowledge_service
 from app.ai.rag.embedder.base import BaseEmbedder
 from app.ai.rag.retrieval import RetrievalFailedError
+from app.core.config import get_settings
 from app.core.dependencies import get_current_active_user, get_db
-from app.core.errors import AppException, ForbiddenException
+from app.core.errors import AppException, ForbiddenException, NotFoundException
 from app.core.security import decode_access_token
 from app.models.conversations import Conversation, Message
+from app.models.enums import AuditActor
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.protect import AuditTrail
 from app.models.user import User
@@ -496,6 +500,193 @@ async def chat_assistant(
             code="BUDGET_EXCEEDED",
             status_code=429,
         ) from e
+
+
+class ConversationItemResponse(BaseModel):
+    id: str
+    title: str | None
+    created_at: str
+    last_message_at: str
+
+
+class RenameConversationRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=120)
+
+
+class MessageItemResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    trace_id: str | None
+    created_at: str
+
+
+class ChatFeedbackRequest(BaseModel):
+    rating: Literal["up", "down"]
+    trace_id: str | None = Field(default=None, max_length=64)
+    reason: str | None = Field(default=None, max_length=300)
+
+
+@router.get("/conversations", response_model=list[ConversationItemResponse])
+async def list_conversations(
+    user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[ConversationItemResponse]:
+    """List conversations belonging to the authenticated user."""
+    stmt = (
+        select(Conversation)
+        .where(Conversation.user_id == user.id)
+        .order_by(Conversation.last_message_at.desc())
+        .limit(50)
+    )
+    res = await session.execute(stmt)
+    return [
+        ConversationItemResponse(
+            id=str(c.id),
+            title=c.title,
+            created_at=c.created_at.isoformat(),
+            last_message_at=c.last_message_at.isoformat(),
+        )
+        for c in res.scalars().all()
+    ]
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=list[MessageItemResponse])
+async def list_conversation_messages(
+    conversation_id: str,
+    user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[MessageItemResponse]:
+    """List masked messages for a user-owned conversation."""
+    try:
+        cid = uuid.UUID(conversation_id)
+    except (ValueError, TypeError) as err:
+        raise NotFoundException("Conversation not found") from err
+
+    conv_res = await session.execute(
+        select(Conversation).where(Conversation.id == cid, Conversation.user_id == user.id)
+    )
+    if conv_res.scalar_one_or_none() is None:
+        raise NotFoundException("Conversation not found")
+
+    msg_res = await session.execute(
+        select(Message)
+        .where(Message.conversation_id == cid, Message.user_id == user.id)
+        .order_by(Message.created_at.asc())
+    )
+    return [
+        MessageItemResponse(
+            id=str(m.id),
+            role=m.role.value,
+            content=m.content_masked,
+            trace_id=m.trace_id,
+            created_at=m.created_at.isoformat(),
+        )
+        for m in msg_res.scalars().all()
+    ]
+
+
+@router.patch("/conversations/{conversation_id}", response_model=ConversationItemResponse)
+async def rename_conversation(
+    conversation_id: str,
+    payload: RenameConversationRequest,
+    user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> ConversationItemResponse:
+    """Rename a user-owned conversation."""
+    try:
+        cid = uuid.UUID(conversation_id)
+    except (ValueError, TypeError) as err:
+        raise NotFoundException("Conversation not found") from err
+
+    res = await session.execute(
+        select(Conversation).where(Conversation.id == cid, Conversation.user_id == user.id)
+    )
+    conv = res.scalar_one_or_none()
+    if conv is None:
+        raise NotFoundException("Conversation not found")
+
+    conv.title = payload.title.strip()
+    await session.commit()
+    await session.refresh(conv)
+    return ConversationItemResponse(
+        id=str(conv.id),
+        title=conv.title,
+        created_at=conv.created_at.isoformat(),
+        last_message_at=conv.last_message_at.isoformat(),
+    )
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+async def delete_conversation(
+    conversation_id: str,
+    user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a single user-owned conversation and its messages."""
+    try:
+        cid = uuid.UUID(conversation_id)
+    except (ValueError, TypeError) as err:
+        raise NotFoundException("Conversation not found") from err
+
+    res = await session.execute(
+        select(Conversation).where(Conversation.id == cid, Conversation.user_id == user.id)
+    )
+    if res.scalar_one_or_none() is None:
+        raise NotFoundException("Conversation not found")
+
+    await session.execute(delete(Message).where(Message.conversation_id == cid, Message.user_id == user.id))
+    await session.execute(delete(Conversation).where(Conversation.id == cid, Conversation.user_id == user.id))
+    await session.commit()
+
+
+@router.post("/feedback", status_code=201)
+async def submit_chat_feedback(
+    payload: ChatFeedbackRequest,
+    user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Record thumbs up/down feedback without logging raw text."""
+    session.add(
+        AuditTrail(
+            user_id=user.id,
+            actor=AuditActor.USER,
+            action="assistant_feedback",
+            resource_type="agent_trace",
+            resource_id=payload.trace_id or "none",
+            metadata_json={"rating": payload.rating, "has_reason": bool(payload.reason and payload.reason.strip())},
+        )
+    )
+    await session.commit()
+    return {"status": "recorded"}
+
+
+@router.post("/chat/stream")
+async def stream_chat_assistant(
+    payload: AssistantChatRequest,
+    user: User = Depends(get_current_active_user),
+    orchestrator: AssistantOrchestrator = Depends(get_orchestrator),
+) -> Response:
+    """Optional SSE streaming endpoint behind PFA_ENABLE_CHAT_STREAMING."""
+    if not get_settings().enable_chat_streaming:
+        raise AppException(
+            message="Streaming is disabled on this server.",
+            code="STREAMING_DISABLED",
+            status_code=501,
+        )
+
+    response = await orchestrator.run(payload, user=user)
+    if response.status == "refusal" and "consent" in response.answer.lower():
+        raise ForbiddenException(message=response.answer)
+
+    async def event_generator() -> AsyncIterator[str]:
+        words = response.answer.split(" ")
+        for idx, word in enumerate(words):
+            chunk = word if idx == 0 else f" {word}"
+            yield f"event: delta\ndata: {json.dumps({'delta': chunk})}\n\n"
+        yield f"event: done\ndata: {response.model_dump_json()}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # ----------------------------------------------------------------------------

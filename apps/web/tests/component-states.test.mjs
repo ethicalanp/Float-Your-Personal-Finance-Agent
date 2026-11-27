@@ -26,13 +26,13 @@ test("Component States - Borrow screen supports skeleton, empty, error, and stat
   assert.ok(content.includes("disclaimer"), "Borrow must render mandatory indicative statutory disclaimer");
 });
 
-test("Component States - Assistant screen supports aria-live, suggested prompts, and DPDP consent banner", () => {
-  const assistantPath = path.join(process.cwd(), "app", "assistant", "page.tsx");
+test("Component States - Float.ai chat screen supports aria-live, suggested prompts, and DPDP consent banner", () => {
+  const assistantPath = path.join(process.cwd(), "app", "chat", "page.tsx");
   const content = fs.readFileSync(assistantPath, "utf-8");
 
-  assert.ok(content.includes("aria-live=\"polite\""), "Assistant must have aria-live message container");
-  assert.ok(content.includes("SUGGESTED_QUESTIONS"), "Assistant must present suggested questions for empty state");
-  assert.ok(content.includes("AI Processing Consent Needed"), "Assistant must present DPDP consent banner when consent is missing");
+  assert.ok(content.includes('aria-live="polite"'), "Float.ai chat must have aria-live message container");
+  assert.ok(content.includes("suggestedPrompts"), "Float.ai chat must present suggested questions for empty state");
+  assert.ok(content.includes("consent-gate-banner"), "Float.ai chat must present DPDP consent banner when consent is missing");
 });
 
 test("Component States - Protect screen supports scam check, recovery lifecycle, and verified helplines", () => {

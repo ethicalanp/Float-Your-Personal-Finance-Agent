@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     admin_session_secret_key: SecretStr | None = None
     admin_session_expire_seconds: int = 1800  # 30 minutes default
 
+    # Float.ai chat streaming flag
+    enable_chat_streaming: bool = False
+
     @field_validator("admin_enabled", "debug", "enable_synthetic_ml_demos", mode="before")
     @classmethod
     def _strip_bool_strings(cls, v: Any) -> Any:
