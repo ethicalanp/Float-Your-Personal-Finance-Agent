@@ -901,6 +901,100 @@ async def handle_get_upcoming_bills(ctx: ToolContext, args: UpcomingBillsInput) 
     )
 
 
+class SubscriptionLeaksInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class SubscriptionLeaksToolData(BaseModel):
+    total_leaks: int
+    estimated_yearly_savings_inr: Decimal
+    potential_yearly_savings_inr: Decimal
+    leaks: list[dict[str, Any]]
+
+
+async def handle_get_subscription_leaks(ctx: ToolContext, args: SubscriptionLeaksInput) -> ToolResult:
+    from app.services.subscriptions_networth_service import compute_subscription_leaks
+
+    res = await compute_subscription_leaks(ctx.session, ctx.user_id)
+    est_inr = paise_to_rupees(res.estimated_yearly_savings_paise)
+    pot_inr = paise_to_rupees(res.potential_yearly_savings_paise)
+    return ToolResult(
+        ok=True,
+        tool="get_subscription_leaks",
+        data=SubscriptionLeaksToolData(
+            total_leaks=res.total_leaks,
+            estimated_yearly_savings_inr=est_inr,
+            potential_yearly_savings_inr=pot_inr,
+            leaks=[lk.model_dump() for lk in res.leaks],
+        ).model_dump(),
+        facts=[
+            Fact(id="subscription_leaks_count", label="Detected Leaks", value=str(res.total_leaks), unit="count"),
+            Fact(
+                id="estimated_yearly_savings_inr",
+                label="Estimated Yearly Savings (Marked Cancel)",
+                value=str(est_inr),
+                unit="INR",
+            ),
+            Fact(
+                id="potential_yearly_savings_inr",
+                label="Potential Yearly Savings",
+                value=str(pot_inr),
+                unit="INR",
+            ),
+        ],
+    )
+
+
+class NetWorthInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class NetWorthToolData(BaseModel):
+    total_assets_inr: Decimal
+    total_liabilities_inr: Decimal
+    net_worth_inr: Decimal
+    is_negative: bool
+    stale_count: int
+    masked_items: list[dict[str, Any]]
+
+
+async def handle_get_net_worth(ctx: ToolContext, args: NetWorthInput) -> ToolResult:
+    from app.ai.security.masking import mask_pii
+    from app.services.subscriptions_networth_service import compute_net_worth_overview
+
+    ov = await compute_net_worth_overview(ctx.session, ctx.user_id)
+    assets_inr = paise_to_rupees(ov.total_assets_paise)
+    liab_inr = paise_to_rupees(ov.total_liabilities_paise)
+    nw_inr = paise_to_rupees(ov.net_worth_paise)
+    masked_items = [
+        {
+            "name_masked": mask_pii(it.name),
+            "item_type": it.item_type,
+            "category": it.category,
+            "is_stale": it.is_stale,
+        }
+        for it in ov.items
+    ]
+    return ToolResult(
+        ok=True,
+        tool="get_net_worth",
+        data=NetWorthToolData(
+            total_assets_inr=assets_inr,
+            total_liabilities_inr=liab_inr,
+            net_worth_inr=nw_inr,
+            is_negative=ov.is_negative,
+            stale_count=ov.stale_count,
+            masked_items=masked_items,
+        ).model_dump(),
+        facts=[
+            Fact(id="net_worth_assets_inr", label="Total Assets", value=str(assets_inr), unit="INR"),
+            Fact(id="net_worth_liabilities_inr", label="Total Liabilities", value=str(liab_inr), unit="INR"),
+            Fact(id="net_worth_inr", label="Net Worth", value=str(nw_inr), unit="INR"),
+            Fact(id="net_worth_stale_count", label="Stale Items", value=str(ov.stale_count), unit="count"),
+        ],
+    )
+
+
 # ============================================================================
 # Tool Specifications and Registration
 # ============================================================================
@@ -997,6 +1091,25 @@ def register_financial_tools() -> None:
             input_model=UpcomingBillsInput,
             output_model=UpcomingBillsData,
             handler=handle_get_upcoming_bills,
+        ),
+        Tool(
+            name="get_subscription_leaks",
+            description=(
+                "Detect potential subscription leaks (duplicates, price increases, small recurring, "
+                "annual renewals, trial-to-paid) and estimated yearly savings."
+            ),
+            input_model=SubscriptionLeaksInput,
+            output_model=SubscriptionLeaksToolData,
+            handler=handle_get_subscription_leaks,
+        ),
+        Tool(
+            name="get_net_worth",
+            description=(
+                "Compute net worth (total assets minus liabilities), stale-value prompt count, and masked summary."
+            ),
+            input_model=NetWorthInput,
+            output_model=NetWorthToolData,
+            handler=handle_get_net_worth,
         ),
     ]
 

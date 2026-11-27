@@ -90,6 +90,7 @@ CREDIT_READINESS_PATTERNS = [
 PERSONAL_FINANCE_PATTERNS = [
     r"\b(?:spend|spending|spent|expense|expenses|income|salary|cash flow|statement|transaction|transactions)\b",
     r"\b(?:recurring|subscription|subscriptions|bill|bills|netflix|gym|rent|groceries|dining|utilities|budget)\b",
+    r"\b(?:net worth|assets|liabilities|subscription leak|leaks)\b",
     r"\b(?:compare|monthly|category|breakdown|highest|lowest|inflow|outflow)\b",
     r"(?:ചെലവ്|ചെലവാക്കി|വരുമാനം|പണം|രൂപ|സബ്സ്ക്രിപ്ഷൻ|മാസം|സ്റ്റേറ്റ്മെന്റ്|ബില്ലുകൾ|ഭക്ഷണം)",
     r"\b(?:chelavu|varumanam|spend|spent|expense|expenses|recurring|bill|bills|paisa|kaasu|summary)\b",

@@ -472,3 +472,66 @@ export interface RecurringSuggestionItem {
   confidence: "high" | "medium";
   detected_occurrences_count: number;
 }
+
+export interface SubscriptionLeakItem {
+  leak_key: string;
+  merchant: string;
+  rules_triggered: string[];
+  monthly_amount_paise: number;
+  annual_cost_paise: number;
+  decision: "undecided" | "keep" | "cancel";
+  explanation: string;
+}
+
+export interface SubscriptionLeaksResponse {
+  total_leaks: number;
+  estimated_yearly_savings_paise: number;
+  potential_yearly_savings_paise: number;
+  leaks: SubscriptionLeakItem[];
+}
+
+export interface NetWorthItem {
+  id: string;
+  name: string;
+  item_type: "asset" | "liability";
+  category: string;
+  amount_paise: number;
+  version: number;
+  valued_at: string;
+  is_stale: boolean;
+  days_since_update: number;
+}
+
+export interface NetWorthSnapshot {
+  id: string;
+  snapshot_date: string;
+  total_assets_paise: number;
+  total_liabilities_paise: number;
+  net_worth_paise: number;
+}
+
+export interface NetWorthOverviewResponse {
+  total_assets_paise: number;
+  total_liabilities_paise: number;
+  net_worth_paise: number;
+  is_negative: boolean;
+  stale_count: number;
+  items: NetWorthItem[];
+  snapshots: NetWorthSnapshot[];
+}
+
+export interface CreateNetWorthItemRequest {
+  name: string;
+  item_type: "asset" | "liability";
+  category?: string;
+  amount_paise: number;
+  valued_at?: string;
+}
+
+export interface UpdateNetWorthItemRequest {
+  name?: string;
+  category?: string;
+  amount_paise?: number;
+  valued_at?: string;
+  expected_version?: number;
+}
