@@ -59,12 +59,15 @@ class PolicyGuard:
             "Float cannot draft court petitions, affidavits, or provide formal legal representation advice.",
             "legal_litigation",
         ),
-        # Adversarial system overrides & illegal hacking
+        # Adversarial system overrides, prompt extraction, & illegal hacking
         (
-            r"\b(?:ignore all previous|system override|unrestricted|bypass data boundaries|forget you are float|"
+            r"\b(?:ignore all previous|ignore prior|disregard previous|system override|unrestricted|"
+            r"bypass data boundaries|forget you are float|reveal (?:your )?system prompt|"
+            r"show (?:your )?system prompt|print (?:your )?(?:system|developer) (?:prompt|instructions)|"
+            r"repeat the text above|developer prompt|jailbreak|act as dan|"
             r"hire\s+(?:a\s+)?(?:private\s+)?(?:ethical\s+)?hacker|pay\s+(?:a\s+)?(?:private\s+)?(?:ethical\s+)?hacker|"
             r"hack\s+back)\b",
-            "Request refused: system override, illegal cyber access, or policy violation attempt.",
+            "Request refused: system override, prompt extraction, illegal cyber access, or policy violation attempt.",
             "adversarial_override",
         ),
         # Identity forgery & illegal documents
