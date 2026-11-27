@@ -9,17 +9,28 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, require_consent
-from app.core.errors import BadRequestException, NotFoundException, PayloadTooLargeException
+from app.core.errors import BadRequestException, ConflictException, NotFoundException, PayloadTooLargeException
+from app.models.budget import DEFAULT_CATEGORY_MAPPINGS, BudgetPlan
 from app.models.enums import (
     AccountStatus,
     AccountType,
+    AuditActor,
     ConsentType,
     ImportStatus,
     TransactionSource,
     TransactionType,
 )
 from app.models.plan import Account, Transaction, TransactionImport
+from app.models.protect import AuditTrail
 from app.models.user import User
+from app.services.budget_service import (
+    BUDGET_PRESETS,
+    MAX_INCOME_PAISE,
+    allocate_budget_paise,
+    compute_irregular_avg_paise,
+    compute_plan_vs_actual,
+    get_ist_month,
+)
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
 from app.services.recurring_service import match_transaction_to_occurrence
 from app.services.statement_parser import parse_csv_statement, parse_sms_statement
@@ -300,6 +311,7 @@ async def list_transactions(
             "description": t.description,
             "description_cleaned": t.description_cleaned,
             "merchant": t.merchant,
+            "is_recurring": t.is_recurring,
         }
         for t in txs
     ]
@@ -353,3 +365,191 @@ async def get_insights(
         for t in tx_models
     ]
     return compute_financial_insights(tx_dicts, current_balance=total_balance)
+
+
+class BudgetPlanUpsertRequest(BaseModel):
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
+    monthly_income_paise: int = Field(..., gt=0, le=MAX_INCOME_PAISE)
+    extra_income_paise: int = Field(default=0, ge=0, le=MAX_INCOME_PAISE)
+    income_mode: Literal["fixed", "irregular_avg", "irregular_conservative"] = "fixed"
+    irregular_months: int = Field(default=3, ge=1, le=12)
+    needs_pct: Decimal = Field(default=Decimal("50.00"), ge=Decimal("0"), le=Decimal("100"))
+    wants_pct: Decimal = Field(default=Decimal("30.00"), ge=Decimal("0"), le=Decimal("100"))
+    savings_pct: Decimal = Field(default=Decimal("20.00"), ge=Decimal("0"), le=Decimal("100"))
+    category_mappings: dict[str, Literal["needs", "wants", "savings"]] | None = None
+    expected_version: int | None = Field(default=None, ge=0)
+
+
+class BudgetPlanItemResponse(BaseModel):
+    id: str
+    month: str
+    version: int
+    monthly_income_paise: int
+    extra_income_paise: int
+    total_income_paise: int
+    income_mode: str
+    irregular_months: int
+    needs_pct: float
+    wants_pct: float
+    savings_pct: float
+    needs_paise: int
+    wants_paise: int
+    savings_paise: int
+    category_mappings: dict[str, str]
+    updated_at: str
+
+
+class BudgetPlanOverviewResponse(BaseModel):
+    month: str
+    plan: BudgetPlanItemResponse | None
+    actuals: dict[str, Any]
+    irregular_avg_paise: int
+    presets: dict[str, dict[str, float]]
+    default_category_mappings: dict[str, str]
+    educational_disclaimer: str
+
+
+def _serialize_budget_plan(plan: BudgetPlan) -> BudgetPlanItemResponse:
+    return BudgetPlanItemResponse(
+        id=str(plan.id),
+        month=plan.month,
+        version=plan.version,
+        monthly_income_paise=plan.monthly_income_paise,
+        extra_income_paise=plan.extra_income_paise,
+        total_income_paise=plan.monthly_income_paise + plan.extra_income_paise,
+        income_mode=plan.income_mode,
+        irregular_months=plan.irregular_months,
+        needs_pct=float(plan.needs_pct),
+        wants_pct=float(plan.wants_pct),
+        savings_pct=float(plan.savings_pct),
+        needs_paise=plan.needs_paise,
+        wants_paise=plan.wants_paise,
+        savings_paise=plan.savings_paise,
+        category_mappings={str(k): str(v) for k, v in (plan.category_mappings or {}).items()},
+        updated_at=plan.updated_at.isoformat(),
+    )
+
+
+@router.get("/budget", response_model=BudgetPlanOverviewResponse)
+async def get_budget_plan(
+    month: str | None = None,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> BudgetPlanOverviewResponse:
+    """Get current versioned budget plan for an IST month with deterministic actuals and warnings."""
+    target_month = month or get_ist_month()
+    stmt = select(BudgetPlan).where(
+        BudgetPlan.user_id == current_user.id,
+        BudgetPlan.month == target_month,
+        BudgetPlan.is_current.is_(True),
+    )
+    res = await db.execute(stmt)
+    plan = res.scalar_one_or_none()
+
+    actuals = await compute_plan_vs_actual(db, current_user.id, target_month, plan)
+    irregular_avg = await compute_irregular_avg_paise(db, current_user.id, months=3, as_of_month=target_month)
+    presets = {k: {bk: float(bv) for bk, bv in v.items()} for k, v in BUDGET_PRESETS.items()}
+
+    return BudgetPlanOverviewResponse(
+        month=target_month,
+        plan=_serialize_budget_plan(plan) if plan else None,
+        actuals=actuals,
+        irregular_avg_paise=irregular_avg,
+        presets=presets,
+        default_category_mappings=dict(DEFAULT_CATEGORY_MAPPINGS),
+        educational_disclaimer="For educational and personal planning only; not investment advice.",
+    )
+
+
+@router.get("/budget/history", response_model=list[BudgetPlanItemResponse])
+async def get_budget_plan_history(
+    month: str | None = None,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> list[BudgetPlanItemResponse]:
+    """List version history of budget plans for the given IST month."""
+    target_month = month or get_ist_month()
+    stmt = (
+        select(BudgetPlan)
+        .where(BudgetPlan.user_id == current_user.id, BudgetPlan.month == target_month)
+        .order_by(BudgetPlan.version.desc())
+    )
+    res = await db.execute(stmt)
+    return [_serialize_budget_plan(p) for p in res.scalars().all()]
+
+
+@router.put("/budget", response_model=BudgetPlanItemResponse)
+async def upsert_budget_plan(
+    req: BudgetPlanUpsertRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> BudgetPlanItemResponse:
+    """Create or update a monthly budget plan with optimistic concurrency and largest-remainder rounding."""
+    target_month = req.month or get_ist_month()
+    total_income_paise = req.monthly_income_paise + req.extra_income_paise
+    try:
+        needs_paise, wants_paise, savings_paise = allocate_budget_paise(
+            total_income_paise,
+            req.needs_pct,
+            req.wants_pct,
+            req.savings_pct,
+        )
+    except ValueError as err:
+        raise BadRequestException(str(err)) from err
+
+    stmt = select(BudgetPlan).where(
+        BudgetPlan.user_id == current_user.id,
+        BudgetPlan.month == target_month,
+        BudgetPlan.is_current.is_(True),
+    )
+    res = await db.execute(stmt)
+    current = res.scalar_one_or_none()
+
+    if current is not None:
+        if req.expected_version is not None and req.expected_version != current.version:
+            raise ConflictException(
+                "Budget plan was updated in another tab or session. Please reload and try again."
+            )
+        current.is_current = False
+        next_version = current.version + 1
+    else:
+        if req.expected_version not in (None, 0):
+            raise ConflictException("Budget plan version mismatch. Please reload and try again.")
+        next_version = 1
+
+    merged_mappings = dict(DEFAULT_CATEGORY_MAPPINGS)
+    if req.category_mappings:
+        merged_mappings.update(req.category_mappings)
+
+    new_plan = BudgetPlan(
+        user_id=current_user.id,
+        month=target_month,
+        version=next_version,
+        is_current=True,
+        monthly_income_paise=req.monthly_income_paise,
+        extra_income_paise=req.extra_income_paise,
+        income_mode=req.income_mode,
+        irregular_months=req.irregular_months,
+        needs_pct=req.needs_pct.quantize(Decimal("0.01")),
+        wants_pct=req.wants_pct.quantize(Decimal("0.01")),
+        savings_pct=req.savings_pct.quantize(Decimal("0.01")),
+        needs_paise=needs_paise,
+        wants_paise=wants_paise,
+        savings_paise=savings_paise,
+        category_mappings=merged_mappings,
+    )
+    db.add(new_plan)
+    await db.flush()
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="budget_plan_updated",
+            resource_type="budget_plan",
+            resource_id=str(new_plan.id),
+            metadata_json={"month": target_month, "version": next_version, "income_mode": req.income_mode},
+        )
+    )
+    await db.commit()
+    await db.refresh(new_plan)
+    return _serialize_budget_plan(new_plan)

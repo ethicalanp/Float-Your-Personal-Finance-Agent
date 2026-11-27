@@ -18,9 +18,12 @@ from app.ai.tools.base import (
 )
 from app.ai.tools.registry import default_registry
 from app.models.borrow import BorrowAssessment
+from app.models.budget import BudgetPlan
 from app.models.enums import TransactionType
 from app.models.plan import Transaction
-from app.models.recurring import RecurringCommitment
+from app.models.recurring import RecurringCommitment, RecurringOccurrence
+from app.services.budget_service import get_ist_month, paise_to_rupees
+from app.services.recurring_service import get_ist_today
 
 
 async def _execute(session: AsyncSession | Session, query: Any) -> Any:
@@ -738,13 +741,173 @@ async def handle_borrow_readiness(ctx: ToolContext, args: BorrowReadinessInput) 
     )
 
 
+class BudgetPlanInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="Optional IST month YYYY-MM")
+
+
+class BudgetPlanData(BaseModel):
+    month: str
+    has_plan: bool
+    needs_pct: Decimal
+    wants_pct: Decimal
+    savings_pct: Decimal
+    needs_inr: Decimal
+    wants_inr: Decimal
+    savings_inr: Decimal
+
+
+async def handle_get_budget_plan(ctx: ToolContext, args: BudgetPlanInput) -> ToolResult:
+    target_month = args.month or get_ist_month()
+    query = select(BudgetPlan).where(
+        BudgetPlan.user_id == ctx.user_id,
+        BudgetPlan.month == target_month,
+        BudgetPlan.is_current.is_(True),
+    )
+    res = await _execute(ctx.session, query)
+    plan: BudgetPlan | None = res.scalar_one_or_none()
+
+    if plan is None:
+        return ToolResult(
+            ok=True,
+            tool="get_budget_plan",
+            data=BudgetPlanData(
+                month=target_month,
+                has_plan=False,
+                needs_pct=Decimal("50.00"),
+                wants_pct=Decimal("30.00"),
+                savings_pct=Decimal("20.00"),
+                needs_inr=Decimal("0.00"),
+                wants_inr=Decimal("0.00"),
+                savings_inr=Decimal("0.00"),
+            ).model_dump(),
+            facts=[
+                Fact(
+                    id="budget_plan_status",
+                    label="Budget Plan Status",
+                    value="not_configured",
+                    unit="status",
+                    period=target_month,
+                )
+            ],
+        )
+
+    needs_inr = paise_to_rupees(plan.needs_paise)
+    wants_inr = paise_to_rupees(plan.wants_paise)
+    savings_inr = paise_to_rupees(plan.savings_paise)
+    return ToolResult(
+        ok=True,
+        tool="get_budget_plan",
+        data=BudgetPlanData(
+            month=target_month,
+            has_plan=True,
+            needs_pct=plan.needs_pct,
+            wants_pct=plan.wants_pct,
+            savings_pct=plan.savings_pct,
+            needs_inr=needs_inr,
+            wants_inr=wants_inr,
+            savings_inr=savings_inr,
+        ).model_dump(),
+        facts=[
+            Fact(id="budget_needs_inr", label="Planned Needs", value=str(needs_inr), unit="INR", period=target_month),
+            Fact(id="budget_wants_inr", label="Planned Wants", value=str(wants_inr), unit="INR", period=target_month),
+            Fact(
+                id="budget_savings_inr",
+                label="Planned Savings",
+                value=str(savings_inr),
+                unit="INR",
+                period=target_month,
+            ),
+        ],
+    )
+
+
+class UpcomingBillsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    days_ahead: int = Field(default=7, ge=1, le=30, description="Lookahead window in days")
+
+
+class UpcomingBillItem(BaseModel):
+    name: str
+    category: str
+    due_date: str
+    expected_amount: Decimal
+    status: str
+
+
+class UpcomingBillsData(BaseModel):
+    due_soon_count: int
+    overdue_count: int
+    total_due_inr: Decimal
+    bills: list[UpcomingBillItem]
+
+
+async def handle_get_upcoming_bills(ctx: ToolContext, args: UpcomingBillsInput) -> ToolResult:
+    from datetime import timedelta
+
+    today = get_ist_today()
+    horizon = today + timedelta(days=args.days_ahead)
+    query = (
+        select(RecurringOccurrence, RecurringCommitment)
+        .join(RecurringCommitment, RecurringOccurrence.commitment_id == RecurringCommitment.id)
+        .where(
+            RecurringOccurrence.user_id == ctx.user_id,
+            RecurringCommitment.is_active.is_(True),
+            RecurringOccurrence.status.in_(["upcoming", "overdue", "missed"]),
+            RecurringOccurrence.due_date <= horizon,
+        )
+        .order_by(RecurringOccurrence.due_date.asc())
+    )
+    res = await _execute(ctx.session, query)
+    rows = res.all()
+
+    bills: list[UpcomingBillItem] = []
+    due_soon_count = 0
+    overdue_count = 0
+    total_due = Decimal("0.00")
+
+    for occ, comm in rows:
+        is_overdue = occ.due_date < today or occ.status in ("overdue", "missed")
+        if is_overdue:
+            overdue_count += 1
+        else:
+            due_soon_count += 1
+        amt = quantize_currency(occ.expected_amount)
+        total_due += amt
+        bills.append(
+            UpcomingBillItem(
+                name=comm.name,
+                category=comm.category,
+                due_date=occ.due_date.isoformat(),
+                expected_amount=amt,
+                status="overdue" if is_overdue else "upcoming",
+            )
+        )
+
+    return ToolResult(
+        ok=True,
+        tool="get_upcoming_bills",
+        data=UpcomingBillsData(
+            due_soon_count=due_soon_count,
+            overdue_count=overdue_count,
+            total_due_inr=quantize_currency(total_due),
+            bills=bills,
+        ).model_dump(),
+        facts=[
+            Fact(id="upcoming_bills_count", label="Upcoming Bills", value=str(due_soon_count), unit="count"),
+            Fact(id="overdue_bills_count", label="Overdue Bills", value=str(overdue_count), unit="count"),
+            Fact(id="total_due_inr", label="Total Bills Due", value=str(quantize_currency(total_due)), unit="INR"),
+        ],
+    )
+
+
 # ============================================================================
 # Tool Specifications and Registration
 # ============================================================================
 
 
 def register_financial_tools() -> None:
-    """Register all 6 core financial analytical tools into default_registry."""
+    """Register all core financial analytical tools into default_registry."""
     tools = [
         Tool(
             name="get_spending_summary",
@@ -805,6 +968,35 @@ def register_financial_tools() -> None:
             input_model=BorrowReadinessInput,
             output_model=BorrowReadinessData,
             handler=handle_borrow_readiness,
+        ),
+        Tool(
+            name="get_budget_plan",
+            description=(
+                "Retrieve the user's monthly INR budget plan (needs/wants/savings percentages and planned amounts) "
+                "for an IST calendar month."
+            ),
+            input_model=BudgetPlanInput,
+            output_model=BudgetPlanData,
+            handler=handle_get_budget_plan,
+        ),
+        Tool(
+            name="get_recurring_payments",
+            description=(
+                "List declared or confirmed recurring commitments (rent, EMIs, SIPs, subscriptions, bills) "
+                "with frequency, expected amount, and due day."
+            ),
+            input_model=ListRecurringPaymentsInput,
+            output_model=ListRecurringPaymentsData,
+            handler=handle_list_recurring,
+        ),
+        Tool(
+            name="get_upcoming_bills",
+            description=(
+                "List upcoming and overdue recurring bill reminders within a lookahead window (in IST)."
+            ),
+            input_model=UpcomingBillsInput,
+            output_model=UpcomingBillsData,
+            handler=handle_get_upcoming_bills,
         ),
     ]
 
