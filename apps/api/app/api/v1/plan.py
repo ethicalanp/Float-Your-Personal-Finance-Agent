@@ -31,6 +31,14 @@ from app.services.budget_service import (
     compute_plan_vs_actual,
     get_ist_month,
 )
+from app.services.calculators_service import (
+    InsuranceGapResponse,
+    SipProjectionResponse,
+    TaxComparisonResponse,
+    calculate_insurance_gap,
+    calculate_sip_projection,
+    compare_tax_regimes,
+)
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
 from app.services.recurring_service import match_transaction_to_occurrence
 from app.services.statement_parser import parse_csv_statement, parse_sms_statement
@@ -553,3 +561,71 @@ async def upsert_budget_plan(
     await db.commit()
     await db.refresh(new_plan)
     return _serialize_budget_plan(new_plan)
+
+
+class SipCalculatorRequest(BaseModel):
+    monthly_sip_paise: int = Field(..., ge=0, le=10_000_000_00)
+    lumpsum_paise: int = Field(0, ge=0, le=100_000_000_00)
+    years: int = Field(..., ge=1, le=50)
+    expected_return_pct: Decimal = Field(Decimal("10"), ge=Decimal("0"), le=Decimal("30"))
+    adjust_for_inflation: bool = True
+    inflation_pct: Decimal = Field(Decimal("6"), ge=Decimal("0"), le=Decimal("20"))
+
+
+class InsuranceGapRequest(BaseModel):
+    annual_income_paise: int = Field(..., ge=0, le=100_000_000_00)
+    dependants: int = Field(0, ge=0, le=20)
+    existing_life_cover_paise: int = Field(0, ge=0, le=1_000_000_000_00)
+    existing_health_cover_paise: int = Field(0, ge=0, le=100_000_000_00)
+    liabilities_paise: int = Field(0, ge=0, le=100_000_000_00)
+
+
+class TaxCompareRequest(BaseModel):
+    gross_income_paise: int = Field(..., ge=0, le=100_000_000_00)
+    is_salaried: bool = True
+    deduction_80c_paise: int = Field(0, ge=0, le=15_000_000)
+    deduction_80d_paise: int = Field(0, ge=0, le=10_000_000)
+    other_deductions_paise: int = Field(0, ge=0, le=50_000_000_00)
+
+
+@router.post("/calculators/sip", response_model=SipProjectionResponse)
+async def sip_calculator_endpoint(
+    req: SipCalculatorRequest,
+    _current_user: User = Depends(require_consent(ConsentType.TERMS)),
+) -> SipProjectionResponse:
+    return calculate_sip_projection(
+        monthly_sip_paise=req.monthly_sip_paise,
+        lumpsum_paise=req.lumpsum_paise,
+        years=req.years,
+        expected_return_pct=req.expected_return_pct,
+        adjust_for_inflation=req.adjust_for_inflation,
+        inflation_pct=req.inflation_pct,
+    )
+
+
+@router.post("/calculators/insurance-gap", response_model=InsuranceGapResponse)
+async def insurance_gap_endpoint(
+    req: InsuranceGapRequest,
+    _current_user: User = Depends(require_consent(ConsentType.TERMS)),
+) -> InsuranceGapResponse:
+    return calculate_insurance_gap(
+        annual_income_paise=req.annual_income_paise,
+        dependants=req.dependants,
+        existing_life_cover_paise=req.existing_life_cover_paise,
+        existing_health_cover_paise=req.existing_health_cover_paise,
+        liabilities_paise=req.liabilities_paise,
+    )
+
+
+@router.post("/calculators/tax-compare", response_model=TaxComparisonResponse)
+async def tax_compare_endpoint(
+    req: TaxCompareRequest,
+    _current_user: User = Depends(require_consent(ConsentType.TERMS)),
+) -> TaxComparisonResponse:
+    return compare_tax_regimes(
+        gross_income_paise=req.gross_income_paise,
+        is_salaried=req.is_salaried,
+        deduction_80c_paise=req.deduction_80c_paise,
+        deduction_80d_paise=req.deduction_80d_paise,
+        other_deductions_paise=req.other_deductions_paise,
+    )

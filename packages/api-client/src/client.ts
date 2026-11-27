@@ -16,6 +16,8 @@ import type {
   ConversationPurgeResponse,
   CreateAccountRequest,
   DeclareCommitmentRequest,
+  InsuranceGapRequest,
+  InsuranceGapResponse,
   KnowledgeAnswerResponse,
   KnowledgeQuestionRequest,
   LoginRequest,
@@ -27,7 +29,11 @@ import type {
   RegisterRequest,
   ScamCheckRequest,
   ScamCheckResponse,
+  SipCalculatorRequest,
+  SipProjectionResponse,
   StatementUploadSummary,
+  TaxCompareRequest,
+  TaxComparisonResponse,
   UpdateCommitmentRequest,
   UploadStatementRequest,
   UserProfileResponse,
@@ -279,6 +285,24 @@ export class FloatApiClient {
     upsertBudget: (data: BudgetPlanUpsertRequest): Promise<BudgetPlanItem> =>
       this.request<BudgetPlanItem>("/api/v1/plan/budget", {
         method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
+    calculateSip: (data: SipCalculatorRequest): Promise<SipProjectionResponse> =>
+      this.request<SipProjectionResponse>("/api/v1/plan/calculators/sip", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    calculateInsuranceGap: (data: InsuranceGapRequest): Promise<InsuranceGapResponse> =>
+      this.request<InsuranceGapResponse>("/api/v1/plan/calculators/insurance-gap", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    compareTaxRegimes: (data: TaxCompareRequest): Promise<TaxComparisonResponse> =>
+      this.request<TaxComparisonResponse>("/api/v1/plan/calculators/tax-compare", {
+        method: "POST",
         body: JSON.stringify(data),
       }),
   };
