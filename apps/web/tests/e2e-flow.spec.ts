@@ -142,12 +142,24 @@ test.describe("Float MVP End-to-End User Flow (Mocked & Themed)", () => {
       })
     );
 
-    await page.route("**/api/backend/**/assistant/**", (route) =>
+    await page.route("**/api/backend/**/assistant/conversations*", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
+    );
+
+    await page.route("**/api/backend/**/assistant/chat/stream", (route) =>
+      route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "STREAMING_DISABLED" } }),
+      })
+    );
+
+    await page.route("**/api/backend/**/assistant/chat", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          status: "answered",
+          status: "success",
           answer: "Under RBI guidelines, report unauthorized transactions within 3 days for zero liability.",
           citations: [
             {
@@ -221,10 +233,11 @@ test.describe("Float MVP End-to-End User Flow (Mocked & Themed)", () => {
       await expect(page.locator("text=Tier 1 - Strong")).toBeVisible();
       await expect(page.locator("text=Indicative readiness only")).toBeVisible();
 
-      // 5. Test Assistant
+      // 5. Test Float.ai (/assistant 308 -> /chat)
       await page.goto("/assistant");
-      await expect(page.locator("h1")).toContainText("Float Assistant");
-      await page.getByRole("button", { name: "What is the RBI 3-day zero liability rule for cyber fraud?" }).click();
+      await expect(page).toHaveURL(/\/chat$/);
+      await expect(page.locator("h1")).toContainText("Float.ai");
+      await page.getByRole("button", { name: /1930 cybercrime helpline|RBI 3-day zero liability/i }).first().click();
       await expect(page.locator("text=RBI Zero Liability Circular")).toBeVisible({ timeout: 10000 });
     });
   }
