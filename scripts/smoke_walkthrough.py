@@ -154,7 +154,7 @@ def run_smoke():
     assert sess_res.status_code == 200, f"GET /auth/sessions failed: {sess_res.text}"
 
     exp_res = client.post("/api/v1/me/export", headers=headers)
-    assert exp_res.status_code == 200 and "user" in exp_res.json(), f"POST /me/export failed: {exp_res.text}"
+    assert exp_res.status_code == 200 and "profile" in exp_res.json(), f"POST /me/export failed: {exp_res.text}"
 
     del_res = client.delete("/api/v1/me", headers=headers)
     assert del_res.status_code == 200 and del_res.json()["status"] == "deletion_scheduled", f"DELETE /me failed: {del_res.text}"
