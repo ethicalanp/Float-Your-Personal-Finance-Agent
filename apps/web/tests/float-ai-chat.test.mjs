@@ -51,3 +51,10 @@ test("FloatMascot - supports idle, thinking, happy, alert states and reduced mot
     assert.ok(mascotSrc.includes(`"${st}"`), `Mascot must support ${st} state`);
   }
 });
+
+test("BFF proxy - passes text/event-stream without buffering and forwards abort signal", () => {
+  const bffSrc = fs.readFileSync(path.join(process.cwd(), "app", "api", "backend", "[...path]", "route.ts"), "utf-8");
+  assert.ok(bffSrc.includes('resContentType.includes("text/event-stream")'), "BFF must detect SSE stream");
+  assert.ok(bffSrc.includes("new Response(backendRes.body"), "BFF must pass ReadableStream without await .text()");
+  assert.ok(bffSrc.includes("signal: request.signal"), "BFF must forward abort signal to backend fetch");
+});

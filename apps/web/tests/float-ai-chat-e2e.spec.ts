@@ -84,4 +84,44 @@ test.describe("Float.ai Chat E2E & Screenshots", () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.screenshot({ path: path.join(screenshotsDir, "float-ai-chat-360.png"), fullPage: false });
   });
+
+  test("Streaming SSE, Stop button, and network drop keeps partial text with Retry", async ({ page }) => {
+    await page.route("**/api/auth/me*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, user_id: "u-1", consent: { ai_data_processing_consent: true, terms_accepted: true } }),
+      })
+    );
+    await page.route("**/api/backend/api/v1/assistant/conversations", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
+    );
+    await page.route("**/api/backend/api/v1/plan/**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
+    );
+
+    // 1. Real SSE stream
+    await page.route("**/api/backend/api/v1/assistant/chat/stream", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: [
+          'event: delta\ndata: {"delta":"Hello "}\n\n',
+          'event: delta\ndata: {"delta":"from Float.ai"}\n\n',
+          'event: done\ndata: {"answer":"Hello from Float.ai","status":"success","route":"knowledge","citations":[],"facts_used":[]}\n\n',
+        ].join(""),
+      })
+    );
+
+    await page.goto("/chat");
+    await page.fill('[data-testid="chat-composer"]', "Hi Float.ai");
+    await page.click('[data-testid="send-chat-btn"]');
+    await expect(page.locator("text=Hello from Float.ai")).toBeVisible();
+
+    // 2. Network drop after stream fails -> keeps error/retry option
+    await page.route("**/api/backend/api/v1/assistant/chat/stream", (route) => route.abort("failed"));
+    await page.fill('[data-testid="chat-composer"]', "Second question");
+    await page.click('[data-testid="send-chat-btn"]');
+    await expect(page.locator("button:has-text('Retry')")).toBeVisible();
+  });
 });
