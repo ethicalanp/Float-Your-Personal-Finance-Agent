@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
@@ -104,6 +105,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content=format_error_response(
                 code=code,
                 message=str(exc.detail),
+                request_id=req_id,
+            ),
+        )
+
+    @application.exception_handler(OperationalError)
+    async def db_operational_error_handler(request: Request, _exc: OperationalError) -> JSONResponse:
+        req_id = getattr(request.state, "request_id", None)
+        return JSONResponse(
+            status_code=503,
+            content=format_error_response(
+                code="DATABASE_UNAVAILABLE",
+                message="Database is temporarily unavailable. Please retry shortly.",
                 request_id=req_id,
             ),
         )
