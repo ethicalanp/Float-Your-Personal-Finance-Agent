@@ -54,6 +54,13 @@ class AnswerValidator:
             re.compile(r"\b(anydesk|teamviewer|rustdesk|quicksupport|airdroid)\b", re.IGNORECASE),
             "Remote access tool instruction prohibited",
         ),
+        (
+            re.compile(
+                r"(?:<\s*script\b|<\s*iframe\b|javascript:|vbscript:|data:text/html|\bonerror\s*=|\bonload\s*=)",
+                re.IGNORECASE,
+            ),
+            "HTML/script or unsafe link injection prohibited",
+        ),
     ]
 
     # Pattern to extract numbers with 2 or more digits, percentages, and currencies
