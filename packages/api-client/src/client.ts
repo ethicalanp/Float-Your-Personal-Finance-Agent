@@ -15,10 +15,12 @@ import type {
   ConsentUpdateRequest,
   ConversationPurgeResponse,
   CreateAccountRequest,
+  CreateNetWorthItemRequest,
   DeclareCommitmentRequest,
   KnowledgeAnswerResponse,
   KnowledgeQuestionRequest,
   LoginRequest,
+  NetWorthOverviewResponse,
   RecoveryCaseCreateRequest,
   RecoveryCaseResponse,
   RecoveryCaseUpdateRequest,
@@ -28,15 +30,12 @@ import type {
   ScamCheckRequest,
   ScamCheckResponse,
   StatementUploadSummary,
+  SubscriptionLeaksResponse,
   UpdateCommitmentRequest,
+  UpdateNetWorthItemRequest,
   UploadStatementRequest,
   UserProfileResponse,
   VerifiedContact,
-  GoalsOverviewResponse,
-  CreateGoalRequest,
-  UpdateGoalRequest,
-  EmergencyFundResponse,
-  UpdateEmergencyFundRequest,
 } from "./types.ts";
 
 export interface ClientConfig {
@@ -287,39 +286,52 @@ export class FloatApiClient {
         body: JSON.stringify(data),
       }),
 
-    getGoals: (month?: string): Promise<GoalsOverviewResponse> =>
-      this.request<GoalsOverviewResponse>(
-        `/api/v1/plan/goals${month ? `?month=${encodeURIComponent(month)}` : ""}`,
-        { method: "GET" }
+    getSubscriptionLeaks: (): Promise<SubscriptionLeaksResponse> =>
+      this.request<SubscriptionLeaksResponse>("/api/v1/plan/subscriptions/leaks", {
+        method: "GET",
+      }),
+
+    setSubscriptionLeakDecision: (
+      leakKey: string,
+      decision: "keep" | "cancel"
+    ): Promise<SubscriptionLeaksResponse> =>
+      this.request<SubscriptionLeaksResponse>(
+        `/api/v1/plan/subscriptions/leaks/${encodeURIComponent(leakKey)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ decision }),
+        }
       ),
 
-    createGoal: (data: CreateGoalRequest): Promise<GoalsOverviewResponse> =>
-      this.request<GoalsOverviewResponse>("/api/v1/plan/goals", {
+    getNetWorth: (): Promise<NetWorthOverviewResponse> =>
+      this.request<NetWorthOverviewResponse>("/api/v1/plan/net-worth", {
+        method: "GET",
+      }),
+
+    createNetWorthItem: (data: CreateNetWorthItemRequest): Promise<NetWorthOverviewResponse> =>
+      this.request<NetWorthOverviewResponse>("/api/v1/plan/net-worth/items", {
         method: "POST",
         body: JSON.stringify(data),
       }),
 
-    updateGoal: (goalId: string, data: UpdateGoalRequest): Promise<GoalsOverviewResponse> =>
-      this.request<GoalsOverviewResponse>(`/api/v1/plan/goals/${goalId}`, {
+    updateNetWorthItem: (
+      itemId: string,
+      data: UpdateNetWorthItemRequest
+    ): Promise<NetWorthOverviewResponse> =>
+      this.request<NetWorthOverviewResponse>(`/api/v1/plan/net-worth/items/${itemId}`, {
         method: "PUT",
         body: JSON.stringify(data),
       }),
 
-    deleteGoal: (goalId: string): Promise<GoalsOverviewResponse> =>
-      this.request<GoalsOverviewResponse>(`/api/v1/plan/goals/${goalId}`, {
+    deleteNetWorthItem: (itemId: string): Promise<NetWorthOverviewResponse> =>
+      this.request<NetWorthOverviewResponse>(`/api/v1/plan/net-worth/items/${itemId}`, {
         method: "DELETE",
       }),
 
-    getEmergencyFund: (month?: string): Promise<EmergencyFundResponse> =>
-      this.request<EmergencyFundResponse>(
-        `/api/v1/plan/emergency-fund${month ? `?month=${encodeURIComponent(month)}` : ""}`,
-        { method: "GET" }
-      ),
-
-    updateEmergencyFund: (data: UpdateEmergencyFundRequest): Promise<EmergencyFundResponse> =>
-      this.request<EmergencyFundResponse>("/api/v1/plan/emergency-fund", {
-        method: "PUT",
-        body: JSON.stringify(data),
+    createNetWorthSnapshot: (snapshotDate?: string): Promise<NetWorthOverviewResponse> =>
+      this.request<NetWorthOverviewResponse>("/api/v1/plan/net-worth/snapshots", {
+        method: "POST",
+        body: JSON.stringify(snapshotDate ? { snapshot_date: snapshotDate } : {}),
       }),
   };
 

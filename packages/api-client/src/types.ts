@@ -473,70 +473,65 @@ export interface RecurringSuggestionItem {
   detected_occurrences_count: number;
 }
 
-// --- Goals & Emergency Fund Types ---
-export interface GoalItemOut {
+export interface SubscriptionLeakItem {
+  leak_key: string;
+  merchant: string;
+  rules_triggered: string[];
+  monthly_amount_paise: number;
+  annual_cost_paise: number;
+  decision: "undecided" | "keep" | "cancel";
+  explanation: string;
+}
+
+export interface SubscriptionLeaksResponse {
+  total_leaks: number;
+  estimated_yearly_savings_paise: number;
+  potential_yearly_savings_paise: number;
+  leaks: SubscriptionLeakItem[];
+}
+
+export interface NetWorthItem {
   id: string;
   name: string;
-  target_amount_paise: number;
-  saved_paise: number;
-  over_saved_paise: number;
-  remaining_paise: number;
-  target_date: string;
-  priority: number;
+  item_type: "asset" | "liability";
+  category: string;
+  amount_paise: number;
   version: number;
-  months_remaining: number;
-  is_past_due: boolean;
-  is_funded: boolean;
-  suggested_monthly_paise: number;
-  allocated_monthly_paise: number;
-  feasible: boolean;
-  progress_pct: number;
+  valued_at: string;
+  is_stale: boolean;
+  days_since_update: number;
 }
 
-export interface GoalsOverviewResponse {
-  ist_month: string;
-  budget_savings_paise?: number | null;
-  total_suggested_monthly_paise: number;
-  has_allocation_conflict: boolean;
-  shortfall_paise: number;
-  goals: GoalItemOut[];
+export interface NetWorthSnapshot {
+  id: string;
+  snapshot_date: string;
+  total_assets_paise: number;
+  total_liabilities_paise: number;
+  net_worth_paise: number;
 }
 
-export interface CreateGoalRequest {
+export interface NetWorthOverviewResponse {
+  total_assets_paise: number;
+  total_liabilities_paise: number;
+  net_worth_paise: number;
+  is_negative: boolean;
+  stale_count: number;
+  items: NetWorthItem[];
+  snapshots: NetWorthSnapshot[];
+}
+
+export interface CreateNetWorthItemRequest {
   name: string;
-  target_amount_paise: number;
-  saved_paise?: number;
-  target_date: string;
-  priority?: number;
+  item_type: "asset" | "liability";
+  category?: string;
+  amount_paise: number;
+  valued_at?: string;
 }
 
-export interface UpdateGoalRequest {
+export interface UpdateNetWorthItemRequest {
   name?: string;
-  target_amount_paise?: number;
-  saved_paise?: number;
-  target_date?: string;
-  priority?: number;
-  expected_version?: number;
-}
-
-export interface EmergencyFundResponse {
-  ist_month: string;
-  target_months: number;
-  needs_paise: number;
-  essential_recurring_paise: number;
-  essential_monthly_paise: number;
-  target_amount_paise: number;
-  saved_paise: number;
-  liquid_accounts_paise: number;
-  effective_saved_paise: number;
-  over_saved_paise: number;
-  remaining_paise: number;
-  progress_pct: number;
-  version: number;
-}
-
-export interface UpdateEmergencyFundRequest {
-  target_months: number;
-  saved_paise: number;
+  category?: string;
+  amount_paise?: number;
+  valued_at?: string;
   expected_version?: number;
 }

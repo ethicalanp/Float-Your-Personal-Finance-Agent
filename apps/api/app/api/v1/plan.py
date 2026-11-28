@@ -40,7 +40,9 @@ from app.services.goals_service import (
     compute_goals_overview,
 )
 from app.services.health_score_service import FORMULA_VERSION, HealthScoreResponse, compute_health_score
+from app.models.subscriptions_networth import NetWorthItem, NetWorthSnapshot, SubscriptionLeakDecision
 from app.services.recurring_service import match_transaction_to_occurrence
+from app.services.subscriptions_networth_service import NetWorthOverviewResponse, SubscriptionLeaksResponse, compute_net_worth_overview, compute_subscription_leaks
 from app.services.statement_parser import (
     StatementParseError,
     parse_csv_statement,
@@ -805,3 +807,200 @@ async def update_emergency_fund_endpoint(
     await db.commit()
     return await compute_emergency_fund_overview(db, current_user.id)
 >>>>>>> feature/goals-emergency
+
+
+class LeakDecisionRequest(BaseModel):
+    decision: Literal["keep", "cancel"]
+
+
+class CreateNetWorthItemRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    item_type: Literal["asset", "liability"]
+    category: str = Field("other", min_length=1, max_length=64)
+    amount_paise: int = Field(..., ge=0)
+    valued_at: datetime | None = None
+
+
+class UpdateNetWorthItemRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    category: str | None = Field(default=None, min_length=1, max_length=64)
+    amount_paise: int | None = Field(default=None, ge=0)
+    valued_at: datetime | None = None
+    expected_version: int | None = None
+
+
+class CreateSnapshotRequest(BaseModel):
+    snapshot_date: date | None = None
+
+
+@router.get("/subscriptions/leaks", response_model=SubscriptionLeaksResponse)
+async def get_subscription_leaks_endpoint(
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> SubscriptionLeaksResponse:
+    return await compute_subscription_leaks(db, current_user.id)
+
+
+@router.put("/subscriptions/leaks/{leak_key}", response_model=SubscriptionLeaksResponse)
+async def set_subscription_leak_decision(
+    leak_key: str,
+    req: LeakDecisionRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> SubscriptionLeaksResponse:
+    res = await db.execute(
+        select(SubscriptionLeakDecision).where(
+            SubscriptionLeakDecision.user_id == current_user.id,
+            SubscriptionLeakDecision.leak_key == leak_key,
+        )
+    )
+    existing = res.scalar_one_or_none()
+    if existing:
+        existing.decision = req.decision
+    else:
+        db.add(
+            SubscriptionLeakDecision(
+                user_id=current_user.id,
+                leak_key=leak_key,
+                decision=req.decision,
+            )
+        )
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="subscription_leak_decision",
+            resource_type="subscription_leak",
+            resource_id=leak_key,
+            metadata_json={"decision": req.decision},
+        )
+    )
+    await db.commit()
+    return await compute_subscription_leaks(db, current_user.id)
+
+
+@router.get("/net-worth", response_model=NetWorthOverviewResponse)
+async def get_net_worth_endpoint(
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> NetWorthOverviewResponse:
+    return await compute_net_worth_overview(db, current_user.id)
+
+
+@router.post("/net-worth/items", response_model=NetWorthOverviewResponse, status_code=201)
+async def create_net_worth_item_endpoint(
+    req: CreateNetWorthItemRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> NetWorthOverviewResponse:
+    item = NetWorthItem(
+        user_id=current_user.id,
+        name=req.name.strip(),
+        item_type=req.item_type,
+        category=req.category.strip(),
+        amount_paise=req.amount_paise,
+        valued_at=req.valued_at or datetime.now(UTC),
+        version=1,
+    )
+    db.add(item)
+    await db.flush()
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="net_worth_item_created",
+            resource_type="net_worth_item",
+            resource_id=str(item.id),
+            metadata_json={"item_type": item.item_type, "category": item.category},
+        )
+    )
+    await db.commit()
+    return await compute_net_worth_overview(db, current_user.id)
+
+
+@router.put("/net-worth/items/{item_id}", response_model=NetWorthOverviewResponse)
+async def update_net_worth_item_endpoint(
+    item_id: uuid.UUID,
+    req: UpdateNetWorthItemRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> NetWorthOverviewResponse:
+    res = await db.execute(
+        select(NetWorthItem).where(NetWorthItem.id == item_id, NetWorthItem.user_id == current_user.id)
+    )
+    item = res.scalar_one_or_none()
+    if item is None:
+        raise NotFoundException("Net worth item not found.")
+    if req.expected_version is not None and req.expected_version != item.version:
+        raise ConflictException("Net worth item was changed elsewhere. Latest version reloaded.")
+
+    if req.name is not None:
+        item.name = req.name.strip()
+    if req.category is not None:
+        item.category = req.category.strip()
+    if req.amount_paise is not None:
+        item.amount_paise = req.amount_paise
+        item.valued_at = req.valued_at or datetime.now(UTC)
+    elif req.valued_at is not None:
+        item.valued_at = req.valued_at
+    item.version += 1
+
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="net_worth_item_updated",
+            resource_type="net_worth_item",
+            resource_id=str(item.id),
+            metadata_json={"version": item.version},
+        )
+    )
+    await db.commit()
+    return await compute_net_worth_overview(db, current_user.id)
+
+
+@router.delete("/net-worth/items/{item_id}", response_model=NetWorthOverviewResponse)
+async def delete_net_worth_item_endpoint(
+    item_id: uuid.UUID,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> NetWorthOverviewResponse:
+    res = await db.execute(
+        select(NetWorthItem).where(NetWorthItem.id == item_id, NetWorthItem.user_id == current_user.id)
+    )
+    item = res.scalar_one_or_none()
+    if item is None:
+        raise NotFoundException("Net worth item not found.")
+    await db.delete(item)
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="net_worth_item_deleted",
+            resource_type="net_worth_item",
+            resource_id=str(item_id),
+            metadata_json={},
+        )
+    )
+    await db.commit()
+    return await compute_net_worth_overview(db, current_user.id)
+
+
+@router.post("/net-worth/snapshots", response_model=NetWorthOverviewResponse, status_code=201)
+async def create_net_worth_snapshot_endpoint(
+    req: CreateSnapshotRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> NetWorthOverviewResponse:
+    ov = await compute_net_worth_overview(db, current_user.id)
+    snap_date = req.snapshot_date or datetime.now(UTC).date()
+    snap = NetWorthSnapshot(
+        user_id=current_user.id,
+        snapshot_date=snap_date,
+        total_assets_paise=ov.total_assets_paise,
+        total_liabilities_paise=ov.total_liabilities_paise,
+        net_worth_paise=ov.net_worth_paise,
+    )
+    db.add(snap)
+    await db.commit()
+    return await compute_net_worth_overview(db, current_user.id)

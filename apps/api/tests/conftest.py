@@ -38,6 +38,11 @@ from app.models.recurring import (
     RecurringNotification,
     RecurringOccurrence,
 )
+from app.models.subscriptions_networth import (
+    NetWorthItem,
+    NetWorthSnapshot,
+    SubscriptionLeakDecision,
+)
 from app.models.user import (
     AuthAuditLog,
     AuthToken,
@@ -74,6 +79,9 @@ APP_TABLES = [
     Message.__table__,
     KnowledgeDocument.__table__,
     KnowledgeChunk.__table__,
+    SubscriptionLeakDecision.__table__,
+    NetWorthItem.__table__,
+    NetWorthSnapshot.__table__,
 ]
 
 
