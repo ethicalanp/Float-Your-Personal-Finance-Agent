@@ -1020,10 +1020,16 @@ async def create_net_worth_snapshot_endpoint(
 
 
 class SipCalculatorRequest(BaseModel):
-    monthly_sip_paise: int = Field(..., ge=0, le=10_000_000_00)
+    mode: Literal["forward", "reverse"] = "forward"
+    monthly_sip_paise: int = Field(0, ge=0, le=10_000_000_00)
+    target_amount_paise: int | None = Field(default=None, gt=0, le=1_000_000_000_00)
     lumpsum_paise: int = Field(0, ge=0, le=100_000_000_00)
     years: int = Field(..., ge=1, le=50)
     expected_return_pct: Decimal = Field(Decimal("10"), ge=Decimal("0"), le=Decimal("30"))
+    step_up_type: Literal["none", "percent", "amount"] = "none"
+    step_up_interval_months: Literal[1, 2, 3, 6, 12] = 12
+    step_up_percent: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+    step_up_amount_paise: int = Field(0, ge=0, le=10_000_000_00)
     adjust_for_inflation: bool = True
     inflation_pct: Decimal = Field(Decimal("6"), ge=Decimal("0"), le=Decimal("20"))
 
@@ -1049,6 +1055,8 @@ async def sip_calculator_endpoint(
     req: SipCalculatorRequest,
     _current_user: User = Depends(require_consent(ConsentType.TERMS)),
 ) -> SipProjectionResponse:
+    if req.mode == "reverse" and (req.target_amount_paise is None or req.target_amount_paise <= 0):
+        raise BadRequestException("Target amount must be greater than 0 for reverse SIP mode.")
     return calculate_sip_projection(
         monthly_sip_paise=req.monthly_sip_paise,
         lumpsum_paise=req.lumpsum_paise,
@@ -1056,6 +1064,12 @@ async def sip_calculator_endpoint(
         expected_return_pct=req.expected_return_pct,
         adjust_for_inflation=req.adjust_for_inflation,
         inflation_pct=req.inflation_pct,
+        mode=req.mode,
+        target_amount_paise=req.target_amount_paise,
+        step_up_type=req.step_up_type,
+        step_up_interval_months=req.step_up_interval_months,
+        step_up_percent=req.step_up_percent,
+        step_up_amount_paise=req.step_up_amount_paise,
     )
 
 

@@ -20,6 +20,11 @@ test("Calculators page renders SIP, insurance gap, tax comparison, and education
   assert.match(src, /Adjust for inflation/);
   assert.match(src, /educational_notice/);
   assert.match(src, /source_url/);
+  assert.match(src, /sip-mode-reverse/);
+  assert.match(src, /sip-stepup-type/);
+  assert.match(src, /sip-yearly-table/);
+  assert.match(src, /sip-chart/);
+  assert.match(src, /sip-convention/);
 });
 
 test("api-client exposes calculator endpoints", () => {

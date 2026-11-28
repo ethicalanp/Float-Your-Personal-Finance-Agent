@@ -474,12 +474,27 @@ export interface RecurringSuggestionItem {
 }
 
 export interface SipCalculatorRequest {
-  monthly_sip_paise: number;
+  mode?: "forward" | "reverse";
+  monthly_sip_paise?: number;
+  target_amount_paise?: number;
   lumpsum_paise?: number;
   years: number;
   expected_return_pct?: number;
+  step_up_type?: "none" | "percent" | "amount";
+  step_up_interval_months?: 1 | 2 | 3 | 6 | 12;
+  step_up_percent?: number;
+  step_up_amount_paise?: number;
   adjust_for_inflation?: boolean;
   inflation_pct?: number;
+}
+
+export interface YearlySipRowOut {
+  year: number;
+  invested_paise: number;
+  nominal_value_paise: number;
+  real_value_paise: number;
+  returns_paise: number;
+  monthly_contribution_paise: number;
 }
 
 export interface SipScenarioOut {
@@ -492,15 +507,27 @@ export interface SipScenarioOut {
 }
 
 export interface SipProjectionResponse {
+  mode: "forward" | "reverse";
   monthly_sip_paise: number;
+  target_amount_paise?: number | null;
+  required_starting_sip_paise?: number | null;
   lumpsum_paise: number;
   years: number;
   expected_return_pct: string;
+  step_up_type: "none" | "percent" | "amount";
+  step_up_interval_months: number;
+  step_up_percent: string;
+  step_up_amount_paise: number;
   adjust_for_inflation: boolean;
   inflation_pct: string;
   total_invested_paise: number;
+  estimated_returns_paise: number;
   projected_nominal_paise: number;
   projected_real_paise: number;
+  plain_sip_invested_paise: number;
+  plain_sip_nominal_paise: number;
+  extra_from_stepup_paise: number;
+  yearly_schedule: YearlySipRowOut[];
   illustrative_scenarios: SipScenarioOut[];
   assumptions: string[];
   disclaimer: string;
