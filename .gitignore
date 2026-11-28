@@ -25,6 +25,10 @@ env/
 .coverage
 htmlcov/
 coverage.xml
+apps/web/test-results/
+apps/web/docs/screenshots/
+playwright-report/
+scratch/
 apps/api/artifacts/
 /artifacts/
 data/

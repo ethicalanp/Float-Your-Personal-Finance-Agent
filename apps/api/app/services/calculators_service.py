@@ -14,6 +14,15 @@ TAX_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "tax_regimes.j
 # ---------------------------------------------------------------------------
 
 
+class YearlySipRowOut(BaseModel):
+    year: int
+    invested_paise: int
+    nominal_value_paise: int
+    real_value_paise: int
+    returns_paise: int
+    monthly_contribution_paise: int
+
+
 class SipScenarioOut(BaseModel):
     label: str
     annual_return_pct: Decimal
@@ -24,39 +33,88 @@ class SipScenarioOut(BaseModel):
 
 
 class SipProjectionResponse(BaseModel):
+    mode: Literal["forward", "reverse"] = "forward"
     monthly_sip_paise: int
+    target_amount_paise: int | None = None
+    required_starting_sip_paise: int | None = None
     lumpsum_paise: int
     years: int
     expected_return_pct: Decimal
+    step_up_type: Literal["none", "percent", "amount"] = "none"
+    step_up_interval_months: int = 12
+    step_up_percent: Decimal = Decimal("0")
+    step_up_amount_paise: int = 0
     adjust_for_inflation: bool
     inflation_pct: Decimal
     total_invested_paise: int
+    estimated_returns_paise: int
     projected_nominal_paise: int
     projected_real_paise: int
+    plain_sip_invested_paise: int
+    plain_sip_nominal_paise: int
+    extra_from_stepup_paise: int
+    yearly_schedule: list[YearlySipRowOut]
     illustrative_scenarios: list[SipScenarioOut]
     assumptions: list[str]
     disclaimer: str
+    final_monthly_contribution_paise: int = 0
+    final_monthly_contribution_year: int = 0
+    unrealistic_contribution_warning: bool = False
+    unrealistic_warning_reason: str | None = None
 
 
-def _future_value_paise(
-    monthly_sip_paise: int,
-    lumpsum_paise: int,
+def _simulate_sip_decimal(
+    starting_monthly_paise: Decimal,
+    lumpsum_paise: Decimal,
     years: int,
     annual_return_pct: Decimal,
-) -> int:
-    """Deterministic monthly compounding future value using Decimal."""
-    months = years * 12
-    total_invested = lumpsum_paise + monthly_sip_paise * months
-    if annual_return_pct <= Decimal("0") or months == 0:
-        return total_invested
+    step_up_type: Literal["none", "percent", "amount"] = "none",
+    step_up_interval_months: int = 12,
+    step_up_percent: Decimal = Decimal("0"),
+    step_up_amount_paise: Decimal = Decimal("0"),
+    adjust_for_inflation: bool = True,
+    inflation_pct: Decimal = Decimal("6"),
+) -> tuple[Decimal, Decimal, list[YearlySipRowOut]]:
+    """Simulate monthly compounding (annual/12), start-of-month contributions, and block step-ups in Decimal."""
+    monthly_rate = (
+        (annual_return_pct / Decimal("100")) / Decimal("12") if annual_return_pct > Decimal("0") else Decimal("0")
+    )
+    balance = lumpsum_paise
+    total_invested = lumpsum_paise
+    schedule: list[YearlySipRowOut] = []
+    interval = max(1, step_up_interval_months)
+    step_factor = Decimal("1") + (step_up_percent / Decimal("100"))
 
-    monthly_rate = (annual_return_pct / Decimal("100")) / Decimal("12")
-    one_plus_r_n = (Decimal("1") + monthly_rate) ** months
+    for month in range(1, years * 12 + 1):
+        block_idx = (month - 1) // interval
+        if step_up_type == "percent" and step_up_percent > Decimal("0"):
+            contrib = starting_monthly_paise * (step_factor**block_idx)
+        elif step_up_type == "amount" and step_up_amount_paise > Decimal("0"):
+            contrib = starting_monthly_paise + (Decimal(block_idx) * step_up_amount_paise)
+        else:
+            contrib = starting_monthly_paise
 
-    fv_lumpsum = Decimal(lumpsum_paise) * one_plus_r_n
-    # End-of-month SIP formula: P * ((1+r)^n - 1) / r
-    fv_sip = Decimal(monthly_sip_paise) * ((one_plus_r_n - Decimal("1")) / monthly_rate)
-    return int((fv_lumpsum + fv_sip).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        total_invested += contrib
+        balance = (balance + contrib) * (Decimal("1") + monthly_rate)
+
+        if month % 12 == 0:
+            yr = month // 12
+            inv_p = int(total_invested.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            nom_p = int(balance.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            real_p = _adjust_for_inflation_paise(nom_p, yr, inflation_pct) if adjust_for_inflation else nom_p
+            contrib_p = int(contrib.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            schedule.append(
+                YearlySipRowOut(
+                    year=yr,
+                    invested_paise=inv_p,
+                    nominal_value_paise=nom_p,
+                    real_value_paise=real_p,
+                    returns_paise=nom_p - inv_p,
+                    monthly_contribution_paise=contrib_p,
+                )
+            )
+
+    return total_invested, balance, schedule
 
 
 def _adjust_for_inflation_paise(nominal_paise: int, years: int, inflation_pct: Decimal) -> int:
@@ -68,18 +126,96 @@ def _adjust_for_inflation_paise(nominal_paise: int, years: int, inflation_pct: D
 
 def calculate_sip_projection(
     monthly_sip_paise: int,
-    lumpsum_paise: int,
-    years: int,
+    lumpsum_paise: int = 0,
+    years: int = 10,
     expected_return_pct: Decimal = Decimal("10"),
     adjust_for_inflation: bool = True,
     inflation_pct: Decimal = Decimal("6"),
+    mode: Literal["forward", "reverse"] = "forward",
+    target_amount_paise: int | None = None,
+    step_up_type: Literal["none", "percent", "amount"] = "none",
+    step_up_interval_months: int = 12,
+    step_up_percent: Decimal = Decimal("0"),
+    step_up_amount_paise: int = 0,
+    monthly_income_paise: int | None = None,
+    max_income_share_pct: Decimal = Decimal("50"),
 ) -> SipProjectionResponse:
-    """Calculate deterministic SIP + lumpsum projection with illustrative return bands."""
-    total_invested = lumpsum_paise + monthly_sip_paise * years * 12
-    nom_main = _future_value_paise(monthly_sip_paise, lumpsum_paise, years, expected_return_pct)
-    real_main = (
-        _adjust_for_inflation_paise(nom_main, years, inflation_pct) if adjust_for_inflation else nom_main
+    """Calculate deterministic forward or reverse SIP + step-up + lumpsum projection in Decimal."""
+    effective_step_type = step_up_type
+    if step_up_type == "percent" and step_up_percent <= Decimal("0"):
+        effective_step_type = "none"
+    elif step_up_type == "amount" and step_up_amount_paise <= 0:
+        effective_step_type = "none"
+
+    required_sip: int | None = None
+    starting_sip_dec = Decimal(monthly_sip_paise)
+
+    if mode == "reverse":
+        target_dec = Decimal(target_amount_paise or 0)
+        # Maturity is linear in starting_sip: M(S) = M_lumpsum + M_fixed_steps + S * M(1)
+        _, fv_lumpsum, _ = _simulate_sip_decimal(
+            Decimal("0"), Decimal(lumpsum_paise), years, expected_return_pct, "none", step_up_interval_months
+        )
+        fv_fixed_steps = Decimal("0")
+        if effective_step_type == "amount":
+            _, fv_fixed_steps, _ = _simulate_sip_decimal(
+                Decimal("0"),
+                Decimal("0"),
+                years,
+                expected_return_pct,
+                "amount",
+                step_up_interval_months,
+                Decimal("0"),
+                Decimal(step_up_amount_paise),
+            )
+        unit_step_type: Literal["none", "percent", "amount"] = (
+            "percent" if effective_step_type == "percent" else "none"
+        )
+        _, fv_unit, _ = _simulate_sip_decimal(
+            Decimal("1"),
+            Decimal("0"),
+            years,
+            expected_return_pct,
+            unit_step_type,
+            step_up_interval_months,
+            step_up_percent,
+            Decimal("0"),
+        )
+        needed = max(Decimal("0"), target_dec - fv_lumpsum - fv_fixed_steps)
+        starting_sip_dec = needed / fv_unit if fv_unit > Decimal("0") else Decimal("0")
+        required_sip = int(starting_sip_dec.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        monthly_sip_paise = required_sip
+
+    inv_dec, nom_dec, yearly_schedule = _simulate_sip_decimal(
+        starting_sip_dec,
+        Decimal(lumpsum_paise),
+        years,
+        expected_return_pct,
+        effective_step_type,
+        step_up_interval_months,
+        step_up_percent,
+        Decimal(step_up_amount_paise),
+        adjust_for_inflation,
+        inflation_pct,
     )
+    total_invested = int(inv_dec.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    nom_main = int(nom_dec.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    real_main = _adjust_for_inflation_paise(nom_main, years, inflation_pct) if adjust_for_inflation else nom_main
+
+    plain_inv_dec, plain_nom_dec, _ = _simulate_sip_decimal(
+        starting_sip_dec,
+        Decimal(lumpsum_paise),
+        years,
+        expected_return_pct,
+        "none",
+        step_up_interval_months,
+        Decimal("0"),
+        Decimal("0"),
+        adjust_for_inflation,
+        inflation_pct,
+    )
+    plain_inv = int(plain_inv_dec.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    plain_nom = int(plain_nom_dec.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
     band_rates = [
         ("Conservative (8% p.a.)", Decimal("8")),
@@ -88,37 +224,95 @@ def calculate_sip_projection(
     ]
     scenarios: list[SipScenarioOut] = []
     for label, rate in band_rates:
-        nom = _future_value_paise(monthly_sip_paise, lumpsum_paise, years, rate)
-        real = _adjust_for_inflation_paise(nom, years, inflation_pct) if adjust_for_inflation else nom
+        sc_inv_d, sc_nom_d, _ = _simulate_sip_decimal(
+            starting_sip_dec,
+            Decimal(lumpsum_paise),
+            years,
+            rate,
+            effective_step_type,
+            step_up_interval_months,
+            step_up_percent,
+            Decimal(step_up_amount_paise),
+            adjust_for_inflation,
+            inflation_pct,
+        )
+        sc_inv = int(sc_inv_d.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        sc_nom = int(sc_nom_d.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        real = _adjust_for_inflation_paise(sc_nom, years, inflation_pct) if adjust_for_inflation else sc_nom
         scenarios.append(
             SipScenarioOut(
                 label=label,
                 annual_return_pct=rate,
-                nominal_corpus_paise=nom,
+                nominal_corpus_paise=sc_nom,
                 real_corpus_paise=real,
-                total_invested_paise=total_invested,
-                nominal_gain_paise=nom - total_invested,
+                total_invested_paise=sc_inv,
+                nominal_gain_paise=sc_nom - sc_inv,
             )
         )
 
+    final_monthly_paise = (
+        yearly_schedule[-1].monthly_contribution_paise
+        if yearly_schedule
+        else int(starting_sip_dec.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    )
+    final_monthly_year = years
+    unrealistic_warning = False
+    unrealistic_reason: str | None = None
+    if mode == "forward" and effective_step_type != "none" and starting_sip_dec > Decimal("0"):
+        exceeds_3x = Decimal(final_monthly_paise) > (starting_sip_dec * Decimal("3"))
+        exceeds_income = (
+            monthly_income_paise is not None
+            and monthly_income_paise > 0
+            and Decimal(final_monthly_paise) > (Decimal(monthly_income_paise) * max_income_share_pct / Decimal("100"))
+        )
+        if exceeds_3x and exceeds_income:
+            unrealistic_warning = True
+            unrealistic_reason = "exceeds_3x_and_income_share"
+        elif exceeds_3x:
+            unrealistic_warning = True
+            unrealistic_reason = "exceeds_3x_starting"
+        elif exceeds_income:
+            unrealistic_warning = True
+            unrealistic_reason = "exceeds_income_share"
+
     assumptions = [
-        "Monthly compounding at rate / 12 with end-of-month contributions.",
+        "Monthly compounding at annual_return / 12 with contributions at the start of each month.",
+        f"Step-up applied at the start of each {step_up_interval_months}-month block ({effective_step_type}).",
         f"Inflation adjustment {'enabled' if adjust_for_inflation else 'disabled'} at {inflation_pct}% p.a.",
-        "Excludes taxes, exit loads, and expense ratios.",
+        "Illustrative mathematical projection only; excludes taxes, exit loads, and expense ratios.",
     ]
     return SipProjectionResponse(
+        mode=mode,
         monthly_sip_paise=monthly_sip_paise,
+        target_amount_paise=target_amount_paise,
+        required_starting_sip_paise=required_sip,
         lumpsum_paise=lumpsum_paise,
         years=years,
         expected_return_pct=expected_return_pct,
+        step_up_type=effective_step_type,
+        step_up_interval_months=step_up_interval_months,
+        step_up_percent=step_up_percent,
+        step_up_amount_paise=step_up_amount_paise,
         adjust_for_inflation=adjust_for_inflation,
         inflation_pct=inflation_pct,
         total_invested_paise=total_invested,
+        estimated_returns_paise=nom_main - total_invested,
         projected_nominal_paise=nom_main,
         projected_real_paise=real_main,
+        plain_sip_invested_paise=plain_inv,
+        plain_sip_nominal_paise=plain_nom,
+        extra_from_stepup_paise=nom_main - plain_nom,
+        yearly_schedule=yearly_schedule,
         illustrative_scenarios=scenarios,
         assumptions=assumptions,
-        disclaimer="Illustrative mathematical projection only — not a guarantee of returns or investment advice.",
+        disclaimer=(
+            "Illustrative mathematical projection only — not a guarantee of returns, "
+            "not advice; taxes and fees ignored."
+        ),
+        final_monthly_contribution_paise=final_monthly_paise,
+        final_monthly_contribution_year=final_monthly_year,
+        unrealistic_contribution_warning=unrealistic_warning,
+        unrealistic_warning_reason=unrealistic_reason,
     )
 
 

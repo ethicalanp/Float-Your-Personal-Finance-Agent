@@ -113,3 +113,13 @@ Running `npm audit` currently flags 6 advisories in the upstream Next.js ecosyst
 ### Codebase Verification Evidence
 - **"use server" Grep Audit**: 0 occurrences across `apps/web/` (`app/`, `components/`, `lib/`). No Server Actions are declared or exposed; Float uses strictly REST BFF route handlers in `app/api/*`.
 - **Remote Image & SVG Configuration**: `apps/web/next.config.mjs` has no `images.remotePatterns` (unconfigured) and `dangerouslyAllowSVG` is unconfigured/false. All UI icons are static JSX Lucide vectors, completely mitigating SVG RCE advisories.
+
+## 6. Playwright E2E Commands
+
+- **Run all mocked E2E projects**: `npx playwright test`
+- **Run full-stack E2E against real FastAPI + PostgreSQL**: `FULLSTACK_E2E=1 npx playwright test --project=fullstack`
+- **Interactive UI mode**: `npx playwright test --ui`
+- **Headed browser mode**: `npx playwright test --headed`
+- **Run a single spec**: `npx playwright test tests/fullstack/plan-and-calculators.spec.ts --project=fullstack`
+- **Record selectors with Codegen**: `npx playwright codegen http://127.0.0.1:3000`
+- **View HTML / trace report**: `npx playwright show-report`

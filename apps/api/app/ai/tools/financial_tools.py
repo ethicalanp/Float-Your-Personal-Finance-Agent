@@ -1197,23 +1197,43 @@ async def handle_get_net_worth(ctx: ToolContext, args: NetWorthInput) -> ToolRes
 
 class SipProjectionToolInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    mode: Literal["forward", "reverse"] = "forward"
     monthly_sip_inr: Decimal = Field(Decimal("5000"), ge=Decimal("0"), le=Decimal("10000000"))
+    target_amount_inr: Decimal | None = Field(default=None, gt=Decimal("0"), le=Decimal("1000000000"))
     lumpsum_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000000"))
     years: int = Field(10, ge=1, le=50)
     expected_return_pct: Decimal = Field(Decimal("10"), ge=Decimal("0"), le=Decimal("30"))
+    step_up_type: Literal["none", "percent", "amount"] = "none"
+    step_up_interval_months: Literal[1, 2, 3, 6, 12] = 12
+    step_up_percent: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+    step_up_amount_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("10000000"))
     adjust_for_inflation: bool = True
     inflation_pct: Decimal = Field(Decimal("6"), ge=Decimal("0"), le=Decimal("20"))
 
 
 class SipProjectionToolData(BaseModel):
+    mode: str
+    required_starting_sip_inr: Decimal | None = None
     total_invested_inr: Decimal
     projected_nominal_inr: Decimal
     projected_real_inr: Decimal
+    extra_from_stepup_inr: Decimal
+    final_monthly_contribution_inr: Decimal
+    final_monthly_contribution_year: int
+    unrealistic_contribution_warning: bool = False
+    unrealistic_warning_reason: str | None = None
     disclaimer: str
 
 
 async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionToolInput) -> ToolResult:
     from app.services.calculators_service import calculate_sip_projection
+
+    if args.mode == "reverse" and (args.target_amount_inr is None or args.target_amount_inr <= Decimal("0")):
+        return ToolResult(
+            ok=False,
+            tool="calculate_sip_projection",
+            data={"error": "target_amount_inr must be > 0 for reverse mode"},
+        )
 
     res = calculate_sip_projection(
         monthly_sip_paise=int((args.monthly_sip_inr * 100).to_integral_value()),
@@ -1222,24 +1242,73 @@ async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionT
         expected_return_pct=args.expected_return_pct,
         adjust_for_inflation=args.adjust_for_inflation,
         inflation_pct=args.inflation_pct,
+        mode=args.mode,
+        target_amount_paise=int((args.target_amount_inr * 100).to_integral_value())
+        if args.target_amount_inr is not None
+        else None,
+        step_up_type=args.step_up_type,
+        step_up_interval_months=args.step_up_interval_months,
+        step_up_percent=args.step_up_percent,
+        step_up_amount_paise=int((args.step_up_amount_inr * 100).to_integral_value()),
     )
     inv_inr = paise_to_rupees(res.total_invested_paise)
     nom_inr = paise_to_rupees(res.projected_nominal_paise)
     real_inr = paise_to_rupees(res.projected_real_paise)
+    extra_inr = paise_to_rupees(res.extra_from_stepup_paise)
+    final_monthly_inr = paise_to_rupees(res.final_monthly_contribution_paise)
+    req_sip_inr = (
+        paise_to_rupees(res.required_starting_sip_paise) if res.required_starting_sip_paise is not None else None
+    )
+    facts = [
+        Fact(id="sip_invested_inr", label="Total Invested", value=str(inv_inr), unit="INR"),
+        Fact(id="sip_nominal_inr", label="Illustrative Nominal Corpus", value=str(nom_inr), unit="INR"),
+        Fact(id="sip_real_inr", label="Illustrative Inflation-Adjusted Corpus", value=str(real_inr), unit="INR"),
+        Fact(id="sip_extra_stepup_inr", label="Extra From Step-Up", value=str(extra_inr), unit="INR"),
+        Fact(
+            id="sip_final_monthly_inr",
+            label=f"Final Monthly Contribution (Year {res.final_monthly_contribution_year})",
+            value=str(final_monthly_inr),
+            unit="INR",
+        ),
+    ]
+    if res.unrealistic_contribution_warning:
+        facts.append(
+            Fact(
+                id="sip_unrealistic_contribution_warning",
+                label="Step-Up Sustainability Warning",
+                value=(
+                    f"Final monthly contribution reaches {final_monthly_inr} INR in Year "
+                    f"{res.final_monthly_contribution_year} ({res.unrealistic_warning_reason})"
+                ),
+                unit="warning",
+            )
+        )
+    if req_sip_inr is not None:
+        facts.append(
+            Fact(
+                id="sip_required_starting_inr",
+                label="Required Starting Monthly SIP",
+                value=str(req_sip_inr),
+                unit="INR",
+            )
+        )
     return ToolResult(
         ok=True,
         tool="calculate_sip_projection",
         data=SipProjectionToolData(
+            mode=res.mode,
+            required_starting_sip_inr=req_sip_inr,
             total_invested_inr=inv_inr,
             projected_nominal_inr=nom_inr,
             projected_real_inr=real_inr,
+            extra_from_stepup_inr=extra_inr,
+            final_monthly_contribution_inr=final_monthly_inr,
+            final_monthly_contribution_year=res.final_monthly_contribution_year,
+            unrealistic_contribution_warning=res.unrealistic_contribution_warning,
+            unrealistic_warning_reason=res.unrealistic_warning_reason,
             disclaimer=res.disclaimer,
         ).model_dump(),
-        facts=[
-            Fact(id="sip_invested_inr", label="Total Invested", value=str(inv_inr), unit="INR"),
-            Fact(id="sip_nominal_inr", label="Illustrative Nominal Corpus", value=str(nom_inr), unit="INR"),
-            Fact(id="sip_real_inr", label="Illustrative Inflation-Adjusted Corpus", value=str(real_inr), unit="INR"),
-        ],
+        facts=facts,
     )
 
 
