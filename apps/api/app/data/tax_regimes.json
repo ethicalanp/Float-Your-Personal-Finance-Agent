@@ -1,0 +1,41 @@
+{
+  "version": "2025-26.1",
+  "financial_year": "FY 2025-26 (AY 2026-27)",
+  "as_of": "2026-11-27",
+  "source_url": "https://www.incometax.gov.in/iec/foportal/",
+  "verified": true,
+  "needs_verified_parameters": false,
+  "educational_notice": "Educational comparison only for resident individuals under 60 (excluding surcharge > ₹50L and special-rate capital gains). Not tax advice or ITR filing.",
+  "cess_pct": 4,
+  "new_regime": {
+    "label": "New Tax Regime (Section 115BAC)",
+    "standard_deduction_paise": 7500000,
+    "allows_80c_80d": false,
+    "rebate_87a_max_taxable_paise": 120000000,
+    "rebate_87a_max_amount_paise": 6000000,
+    "slabs": [
+      { "up_to_paise": 40000000, "rate_pct": 0 },
+      { "up_to_paise": 80000000, "rate_pct": 5 },
+      { "up_to_paise": 120000000, "rate_pct": 10 },
+      { "up_to_paise": 160000000, "rate_pct": 15 },
+      { "up_to_paise": 200000000, "rate_pct": 20 },
+      { "up_to_paise": 240000000, "rate_pct": 25 },
+      { "up_to_paise": null, "rate_pct": 30 }
+    ]
+  },
+  "old_regime": {
+    "label": "Old Tax Regime (Under 60 Years)",
+    "standard_deduction_paise": 5000000,
+    "allows_80c_80d": true,
+    "max_80c_paise": 15000000,
+    "max_80d_paise": 10000000,
+    "rebate_87a_max_taxable_paise": 50000000,
+    "rebate_87a_max_amount_paise": 1250000,
+    "slabs": [
+      { "up_to_paise": 25000000, "rate_pct": 0 },
+      { "up_to_paise": 50000000, "rate_pct": 5 },
+      { "up_to_paise": 100000000, "rate_pct": 20 },
+      { "up_to_paise": null, "rate_pct": 30 }
+    ]
+  }
+}
