@@ -353,7 +353,7 @@ class AgentPlanner:
             messages=llm_messages,
             response_schema=AgentPlanOutput,
             temperature=0.0,
-            max_output_tokens=500,
+            max_output_tokens=1500,
             prompt_version="planner_v1",
             trace_id=trace_id,
             user_id=user_id,

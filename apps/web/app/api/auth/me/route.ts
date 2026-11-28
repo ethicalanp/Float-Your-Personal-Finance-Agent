@@ -10,18 +10,16 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, error: "Session invalid or expired" }, { status: res.status });
-    }
-    const me = await res.json();
+    const client = new FloatApiClient({ token });
+    const profile: any = await client.auth.getProfile();
     return NextResponse.json({
       ok: true,
-      user_id: me.user_id,
-      consent: me.consent ?? { ai_data_processing_consent: false },
+      user_id: profile.user_id ?? profile.id,
+      consent: profile.consent ?? {
+        terms_accepted: Boolean(profile.terms_accepted),
+        privacy_accepted: Boolean(profile.privacy_accepted),
+        ai_data_processing_consent: Boolean(profile.ai_data_processing_consent),
+      },
     });
   } catch (err: any) {
     const status = err.status || 401;

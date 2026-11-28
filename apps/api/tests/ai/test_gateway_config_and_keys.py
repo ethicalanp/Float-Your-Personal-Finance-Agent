@@ -89,3 +89,29 @@ async def test_fallback_provider_failover():
     assert res.text == "Fallback response"
     assert len(primary_fake.history) == 1
     assert len(fallback_fake.history) == 1
+
+
+def test_llm_config_reads_dotenv_when_not_in_test_env(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "PFA_LLM_PROVIDER=groq\nPFA_LLM_MODEL=openai/gpt-oss-120b\nGROQ_API_KEY=gsk_test_key_123\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("PFA_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("PFA_LLM_MODEL", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("PFA_LLM_API_KEY", raising=False)
+    monkeypatch.setenv("PFA_APP_ENV", "development")
+
+    cfg = LLMConfig()
+    assert cfg.provider == "groq"
+    assert cfg.model == "openai/gpt-oss-120b"
+    assert cfg.api_key is not None
+    assert cfg.api_key.get_secret_value() == "gsk_test_key_123"
+    assert cfg.approved_for_real_data is True
+
+    # In test mode, .env is ignored and defaults to fake
+    monkeypatch.setenv("PFA_APP_ENV", "test")
+    test_cfg = LLMConfig()
+    assert test_cfg.provider == "fake"

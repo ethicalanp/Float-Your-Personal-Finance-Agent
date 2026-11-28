@@ -1,10 +1,31 @@
 import logging
 import os
+from pathlib import Path
 
 from pydantic import BaseModel, SecretStr, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 logger = logging.getLogger("app.ai.gateway.config")
+
+
+def _read_env_file_key(key: str) -> str | None:
+    """Read a single key from local .env files when not exported to os.environ."""
+    for candidate in (Path(".env"), Path("apps/api/.env")):
+        if not candidate.is_file():
+            continue
+        try:
+            for raw_line in candidate.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                if k.strip() == key:
+                    val = v.strip().strip("'\"")
+                    if val:
+                        return val
+        except OSError:
+            continue
+    return None
 
 
 class FallbackLLMConfig(BaseModel):
@@ -28,8 +49,23 @@ class LLMConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="PFA_LLM_",
         env_nested_delimiter="__",
+        env_file=(".env", "apps/api/.env"),
+        env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        if os.getenv("PFA_APP_ENV", "").lower() == "test":
+            return (init_settings, env_settings, file_secret_settings)
+        return (init_settings, env_settings, dotenv_settings, file_secret_settings)
 
     provider: str = "fake"
     base_url: str = ""
@@ -58,6 +94,8 @@ class LLMConfig(BaseSettings):
                 self.model = os.getenv("PFA_LLM_MODEL", "openai/gpt-oss-120b")
             if self.api_key is None:
                 groq_key = os.getenv("GROQ_API_KEY") or os.getenv("PFA_LLM_API_KEY")
+                if not groq_key and os.getenv("PFA_APP_ENV", "").lower() != "test":
+                    groq_key = _read_env_file_key("GROQ_API_KEY") or _read_env_file_key("PFA_LLM_API_KEY")
                 if groq_key:
                     clean_key = groq_key.strip().strip("'\"")
                     self.api_key = SecretStr(clean_key)
