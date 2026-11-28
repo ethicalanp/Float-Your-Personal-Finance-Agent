@@ -250,7 +250,7 @@ export default function HomePage() {
         )}
 
         {/* Float Health Score & Float Path */}
-        {healthScore && (
+        {healthScore && Array.isArray(healthScore.components) && (
           <section
             id="health-score"
             data-testid="health-score-card"
@@ -275,7 +275,7 @@ export default function HomePage() {
                       : "Insufficient data"}
                   </div>
                   <div className="text-xs text-mute capitalize">
-                    Band: <span className="font-medium text-ink">{healthScore.band.replace("_", " ")}</span>
+                    Band: <span className="font-medium text-ink">{healthScore.band?.replace("_", " ") ?? "—"}</span>
                     {typeof healthScore.delta_from_previous === "number" && healthScore.delta_from_previous !== 0 && (
                       <span className="ml-2 font-medium text-accent">
                         ({healthScore.delta_from_previous > 0 ? "+" : ""}
@@ -345,7 +345,7 @@ export default function HomePage() {
             </div>
 
             {/* Float Path */}
-            {healthScore.float_path.length > 0 && (
+            {Array.isArray(healthScore.float_path) && healthScore.float_path.length > 0 && (
               <div data-testid="float-path-section" className="rounded-2xl border border-line bg-soft/30 p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-mute">
