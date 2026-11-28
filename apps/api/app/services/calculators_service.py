@@ -57,6 +57,10 @@ class SipProjectionResponse(BaseModel):
     illustrative_scenarios: list[SipScenarioOut]
     assumptions: list[str]
     disclaimer: str
+    final_monthly_contribution_paise: int = 0
+    final_monthly_contribution_year: int = 0
+    unrealistic_contribution_warning: bool = False
+    unrealistic_warning_reason: str | None = None
 
 
 def _simulate_sip_decimal(
@@ -133,6 +137,8 @@ def calculate_sip_projection(
     step_up_interval_months: int = 12,
     step_up_percent: Decimal = Decimal("0"),
     step_up_amount_paise: int = 0,
+    monthly_income_paise: int | None = None,
+    max_income_share_pct: Decimal = Decimal("50"),
 ) -> SipProjectionResponse:
     """Calculate deterministic forward or reverse SIP + step-up + lumpsum projection in Decimal."""
     effective_step_type = step_up_type
@@ -244,6 +250,31 @@ def calculate_sip_projection(
             )
         )
 
+    final_monthly_paise = (
+        yearly_schedule[-1].monthly_contribution_paise
+        if yearly_schedule
+        else int(starting_sip_dec.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    )
+    final_monthly_year = years
+    unrealistic_warning = False
+    unrealistic_reason: str | None = None
+    if mode == "forward" and effective_step_type != "none" and starting_sip_dec > Decimal("0"):
+        exceeds_3x = Decimal(final_monthly_paise) > (starting_sip_dec * Decimal("3"))
+        exceeds_income = (
+            monthly_income_paise is not None
+            and monthly_income_paise > 0
+            and Decimal(final_monthly_paise) > (Decimal(monthly_income_paise) * max_income_share_pct / Decimal("100"))
+        )
+        if exceeds_3x and exceeds_income:
+            unrealistic_warning = True
+            unrealistic_reason = "exceeds_3x_and_income_share"
+        elif exceeds_3x:
+            unrealistic_warning = True
+            unrealistic_reason = "exceeds_3x_starting"
+        elif exceeds_income:
+            unrealistic_warning = True
+            unrealistic_reason = "exceeds_income_share"
+
     assumptions = [
         "Monthly compounding at annual_return / 12 with contributions at the start of each month.",
         f"Step-up applied at the start of each {step_up_interval_months}-month block ({effective_step_type}).",
@@ -278,6 +309,10 @@ def calculate_sip_projection(
             "Illustrative mathematical projection only — not a guarantee of returns, "
             "not advice; taxes and fees ignored."
         ),
+        final_monthly_contribution_paise=final_monthly_paise,
+        final_monthly_contribution_year=final_monthly_year,
+        unrealistic_contribution_warning=unrealistic_warning,
+        unrealistic_warning_reason=unrealistic_reason,
     )
 
 

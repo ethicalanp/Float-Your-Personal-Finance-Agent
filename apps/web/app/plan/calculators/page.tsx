@@ -10,10 +10,11 @@ import type {
   SipProjectionResponse,
   TaxComparisonResponse,
 } from "@float/api-client";
-import { formatINR } from "@/lib/i18n";
+import { formatINR, getActiveLanguage, getTranslation } from "@/lib/i18n";
 
 export default function PlanCalculatorsPage() {
   const [hideAmounts, setHideAmounts] = useState(false);
+  const [t, setT] = useState(() => getTranslation("en"));
   const [error, setError] = useState<string | null>(null);
 
   // 1. SIP state
@@ -51,6 +52,7 @@ export default function PlanCalculatorsPage() {
 
   useEffect(() => {
     setHideAmounts(localStorage.getItem("float_hide_amounts") === "true");
+    setT(getTranslation(getActiveLanguage()));
     const onPrivacy = (e: any) => {
       if (typeof e.detail?.hide === "boolean") setHideAmounts(e.detail.hide);
     };
@@ -431,6 +433,23 @@ export default function PlanCalculatorsPage() {
                     </p>
                   </div>
                 </div>
+                {sipRes.mode === "forward" && sipRes.unrealistic_contribution_warning && (
+                  <div
+                    role="status"
+                    data-testid="sip-unrealistic-warning"
+                    className="rounded-xl border border-warn/50 bg-warn/10 px-3 py-2 text-xs text-ink space-y-0.5"
+                  >
+                    <p className="font-semibold text-warn">{t.calculators.stepUpWarningTitle}</p>
+                    <p>
+                      {t.calculators.stepUpWarningBody
+                        .replace(
+                          "{amount}",
+                          formatINR(sipRes.final_monthly_contribution_paise / 100, { hideAmount: hideAmounts }),
+                        )
+                        .replace("{year}", String(sipRes.final_monthly_contribution_year))}
+                    </p>
+                  </div>
+                )}
                 {sipRes.extra_from_stepup_paise > 0 && (
                   <div className="rounded-xl border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ink" data-testid="sip-stepup-delta">
                     Extra from step-up vs plain SIP:{" "}

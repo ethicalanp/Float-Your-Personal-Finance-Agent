@@ -1032,6 +1032,7 @@ class SipCalculatorRequest(BaseModel):
     step_up_amount_paise: int = Field(0, ge=0, le=10_000_000_00)
     adjust_for_inflation: bool = True
     inflation_pct: Decimal = Field(Decimal("6"), ge=Decimal("0"), le=Decimal("20"))
+    max_income_share_pct: Decimal = Field(Decimal("50"), gt=Decimal("0"), le=Decimal("100"))
 
 
 class InsuranceGapRequest(BaseModel):
@@ -1053,10 +1054,19 @@ class TaxCompareRequest(BaseModel):
 @router.post("/calculators/sip", response_model=SipProjectionResponse)
 async def sip_calculator_endpoint(
     req: SipCalculatorRequest,
-    _current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
 ) -> SipProjectionResponse:
     if req.mode == "reverse" and (req.target_amount_paise is None or req.target_amount_paise <= 0):
         raise BadRequestException("Target amount must be greater than 0 for reverse SIP mode.")
+    budget_res = await db.execute(
+        select(BudgetPlan)
+        .where(BudgetPlan.user_id == current_user.id, BudgetPlan.is_current.is_(True))
+        .order_by(BudgetPlan.updated_at.desc())
+        .limit(1)
+    )
+    budget = budget_res.scalar_one_or_none()
+    monthly_income_paise = (budget.monthly_income_paise + budget.extra_income_paise) if budget is not None else None
     return calculate_sip_projection(
         monthly_sip_paise=req.monthly_sip_paise,
         lumpsum_paise=req.lumpsum_paise,
@@ -1070,6 +1080,8 @@ async def sip_calculator_endpoint(
         step_up_interval_months=req.step_up_interval_months,
         step_up_percent=req.step_up_percent,
         step_up_amount_paise=req.step_up_amount_paise,
+        monthly_income_paise=monthly_income_paise,
+        max_income_share_pct=req.max_income_share_pct,
     )
 
 

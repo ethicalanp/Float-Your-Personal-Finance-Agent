@@ -486,6 +486,7 @@ export interface SipCalculatorRequest {
   step_up_amount_paise?: number;
   adjust_for_inflation?: boolean;
   inflation_pct?: number;
+  max_income_share_pct?: number;
 }
 
 export interface YearlySipRowOut {
@@ -531,6 +532,10 @@ export interface SipProjectionResponse {
   illustrative_scenarios: SipScenarioOut[];
   assumptions: string[];
   disclaimer: string;
+  final_monthly_contribution_paise: number;
+  final_monthly_contribution_year: number;
+  unrealistic_contribution_warning: boolean;
+  unrealistic_warning_reason?: string | null;
 }
 
 export interface InsuranceGapRequest {
@@ -554,6 +559,10 @@ export interface InsuranceGapResponse {
   health_status: "covered" | "gap";
   assumptions: string[];
   disclaimer: string;
+  final_monthly_contribution_paise: number;
+  final_monthly_contribution_year: number;
+  unrealistic_contribution_warning: boolean;
+  unrealistic_warning_reason?: string | null;
 }
 
 export interface TaxCompareRequest {

@@ -131,6 +131,10 @@ export const DICTIONARY = {
       insufficientData: "Insufficient data",
       bestNextAction: "Best next action",
     },
+    calculators: {
+      stepUpWarningTitle: "Step-up contribution sustainability note",
+      stepUpWarningBody: "Final monthly SIP reaches {amount} in Year {year}, which exceeds 3x your starting SIP or your configured budget income share.",
+    },
   },
   ml: {
     nav: {
@@ -241,6 +245,11 @@ export const DICTIONARY = {
       insufficientData: "ആവശ്യമായ വിവരങ്ങൾ ഇല്ല", // needsReview
       bestNextAction: "അടുത്ത മികച്ച ഘട്ടം", // needsReview
     },
+    // needsReview
+    calculators: {
+      stepUpWarningTitle: "സ്റ്റെപ്പ്-അപ്പ് തുക മുന്നറിയിപ്പ്", // needsReview
+      stepUpWarningBody: "വർഷം {year}-ൽ പ്രതിമാസ SIP {amount} ആകും, ഇത് ആരംഭ തുകയുടെ 3 മടങ്ങോ വരുമാന പരിധിയോ കവിയുന്നു.", // needsReview
+    },
   },
   manglish: {
     nav: {
@@ -350,6 +359,11 @@ export const DICTIONARY = {
       title: "Float Health Score", // needsReview
       insufficientData: "Insufficient data", // needsReview
       bestNextAction: "Best next action", // needsReview
+    },
+    // needsReview
+    calculators: {
+      stepUpWarningTitle: "Step-up contribution warning", // needsReview
+      stepUpWarningBody: "Year {year}-il monthly SIP {amount} aakum, ithu starting amount-inte 3x allenkil budget income share kadakkunnu.", // needsReview
     },
   },
 } as const;

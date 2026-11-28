@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.services.calculators_service import (
@@ -171,6 +172,83 @@ def test_sip_property_invariants_and_reverse_mode() -> None:
         step_up_amount_paise=200_000,
     )
     assert one_yr.extra_from_stepup_paise == 0
+
+
+def test_sip_unrealistic_contribution_warning() -> None:
+    # 5% step-up every 3 months over 10 years -> final monthly > 3x starting -> triggers warning
+    triggered = calculate_sip_projection(
+        monthly_sip_paise=1_000_000,
+        years=10,
+        expected_return_pct=Decimal("10"),
+        step_up_type="percent",
+        step_up_interval_months=3,
+        step_up_percent=Decimal("5"),
+    )
+    assert triggered.unrealistic_contribution_warning is True
+    assert triggered.unrealistic_warning_reason == "exceeds_3x_starting"
+    assert triggered.final_monthly_contribution_year == 10
+    assert triggered.final_monthly_contribution_paise == 6_704_751
+
+    # 1-year plan with 5% every 3 months -> final is ~1.16x starting -> does NOT trigger
+    short_plan = calculate_sip_projection(
+        monthly_sip_paise=1_000_000,
+        years=1,
+        expected_return_pct=Decimal("10"),
+        step_up_type="percent",
+        step_up_interval_months=3,
+        step_up_percent=Decimal("5"),
+    )
+    assert short_plan.unrealistic_contribution_warning is False
+
+    # 0% step-up over 10 years -> does NOT trigger
+    zero_step = calculate_sip_projection(
+        monthly_sip_paise=1_000_000,
+        years=10,
+        expected_return_pct=Decimal("10"),
+        step_up_type="percent",
+        step_up_interval_months=3,
+        step_up_percent=Decimal("0"),
+    )
+    assert zero_step.unrealistic_contribution_warning is False
+
+    # Configurable budget income share threshold triggers even under 3x
+    income_warn = calculate_sip_projection(
+        monthly_sip_paise=1_000_000,  # ₹10,000
+        years=3,
+        expected_return_pct=Decimal("10"),
+        step_up_type="percent",
+        step_up_interval_months=12,
+        step_up_percent=Decimal("10"),  # final ₹12,100 (< 3x)
+        monthly_income_paise=2_000_000,  # ₹20,000 -> 50% = ₹10,000
+        max_income_share_pct=Decimal("50"),
+    )
+    assert income_warn.unrealistic_contribution_warning is True
+    assert income_warn.unrealistic_warning_reason == "exceeds_income_share"
+
+
+@pytest.mark.asyncio
+async def test_sip_tool_emits_unrealistic_warning_fact() -> None:
+    from unittest.mock import MagicMock
+
+    from app.ai.tools.base import ToolContext
+    from app.ai.tools.financial_tools import SipProjectionToolInput, handle_calculate_sip_projection
+
+    ctx = ToolContext(user_id=1, request_id="test-sip-warn", session=MagicMock())
+    res = await handle_calculate_sip_projection(
+        ctx,
+        SipProjectionToolInput(
+            monthly_sip_inr=Decimal("10000"),
+            years=10,
+            expected_return_pct=Decimal("10"),
+            step_up_type="percent",
+            step_up_interval_months=3,
+            step_up_percent=Decimal("5"),
+        ),
+    )
+    assert res.ok is True
+    assert res.data["unrealistic_contribution_warning"] is True
+    assert res.data["final_monthly_contribution_year"] == 10
+    assert any(f.id == "sip_unrealistic_contribution_warning" for f in res.facts)
 
 
 def test_insurance_gap_heuristic_and_no_dependants() -> None:

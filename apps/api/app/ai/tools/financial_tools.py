@@ -1218,6 +1218,10 @@ class SipProjectionToolData(BaseModel):
     projected_nominal_inr: Decimal
     projected_real_inr: Decimal
     extra_from_stepup_inr: Decimal
+    final_monthly_contribution_inr: Decimal
+    final_monthly_contribution_year: int
+    unrealistic_contribution_warning: bool = False
+    unrealistic_warning_reason: str | None = None
     disclaimer: str
 
 
@@ -1251,6 +1255,7 @@ async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionT
     nom_inr = paise_to_rupees(res.projected_nominal_paise)
     real_inr = paise_to_rupees(res.projected_real_paise)
     extra_inr = paise_to_rupees(res.extra_from_stepup_paise)
+    final_monthly_inr = paise_to_rupees(res.final_monthly_contribution_paise)
     req_sip_inr = (
         paise_to_rupees(res.required_starting_sip_paise) if res.required_starting_sip_paise is not None else None
     )
@@ -1259,7 +1264,25 @@ async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionT
         Fact(id="sip_nominal_inr", label="Illustrative Nominal Corpus", value=str(nom_inr), unit="INR"),
         Fact(id="sip_real_inr", label="Illustrative Inflation-Adjusted Corpus", value=str(real_inr), unit="INR"),
         Fact(id="sip_extra_stepup_inr", label="Extra From Step-Up", value=str(extra_inr), unit="INR"),
+        Fact(
+            id="sip_final_monthly_inr",
+            label=f"Final Monthly Contribution (Year {res.final_monthly_contribution_year})",
+            value=str(final_monthly_inr),
+            unit="INR",
+        ),
     ]
+    if res.unrealistic_contribution_warning:
+        facts.append(
+            Fact(
+                id="sip_unrealistic_contribution_warning",
+                label="Step-Up Sustainability Warning",
+                value=(
+                    f"Final monthly contribution reaches {final_monthly_inr} INR in Year "
+                    f"{res.final_monthly_contribution_year} ({res.unrealistic_warning_reason})"
+                ),
+                unit="warning",
+            )
+        )
     if req_sip_inr is not None:
         facts.append(
             Fact(
@@ -1279,6 +1302,10 @@ async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionT
             projected_nominal_inr=nom_inr,
             projected_real_inr=real_inr,
             extra_from_stepup_inr=extra_inr,
+            final_monthly_contribution_inr=final_monthly_inr,
+            final_monthly_contribution_year=res.final_monthly_contribution_year,
+            unrealistic_contribution_warning=res.unrealistic_contribution_warning,
+            unrealistic_warning_reason=res.unrealistic_warning_reason,
             disclaimer=res.disclaimer,
         ).model_dump(),
         facts=facts,
