@@ -25,8 +25,16 @@ from app.ai.tools.financial_tools import (
     CashFlowInput,
     CategoryBreakdownInput,
     ComparePeriodsInput,
+    EmergencyFundToolInput,
+    GoalsToolInput,
+    HealthScoreInput,
+    InsuranceGapToolInput,
     ListRecurringPaymentsInput,
+    NetWorthInput,
+    SipProjectionToolInput,
     SpendingSummaryInput,
+    SubscriptionLeaksInput,
+    TaxCompareToolInput,
 )
 from app.models.protect import AuditTrail
 
@@ -40,10 +48,18 @@ ALLOWED_TOOL_CATALOGUE = {
     "list_recurring_payments": ListRecurringPaymentsInput,
     "get_borrow_readiness": BorrowReadinessInput,
     "get_budget_plan": BudgetPlanInput,
+    "get_health_score": HealthScoreInput,
+    "get_goals": GoalsToolInput,
+    "get_emergency_fund": EmergencyFundToolInput,
+    "get_subscription_leaks": SubscriptionLeaksInput,
+    "get_net_worth": NetWorthInput,
     "check_scam_message": CheckScamInput,
     "draft_complaint": DraftComplaintInput,
     "get_verified_contacts": GetVerifiedContactsInput,
     "search_knowledge": SearchKnowledgeInput,
+    "calculate_sip_projection": SipProjectionToolInput,
+    "calculate_insurance_gap": InsuranceGapToolInput,
+    "compare_tax_regimes": TaxCompareToolInput,
 }
 
 MAX_STEPS = 4
@@ -64,6 +80,11 @@ You MUST propose a concise, valid JSON plan to address the user inquiry using ON
 9. get_verified_contacts(category, search_query)
 10. search_knowledge(query, language, top_k)
 11. get_budget_plan(month)
+12. get_health_score(month)
+13. get_goals(month)
+14. get_emergency_fund(month)
+15. get_subscription_leaks()
+16. get_net_worth()
 
 Rules:
 - Maximum 4 steps total.
@@ -202,6 +223,22 @@ def create_deterministic_plan(route: RouteClass, query: str) -> OrchestratorPlan
                     arguments={"start_date": str(start_date), "end_date": str(end_date), "bucket": "monthly"},
                 )
             )
+        elif any(w in q_lower for w in ("health score", "financial health", "float path")):
+            tool_calls.append(ToolCallSpec(tool_name="get_health_score", arguments={}))
+        elif any(w in q_lower for w in ("emergency fund", "rainy day", "emergency buffer")):
+            tool_calls.append(ToolCallSpec(tool_name="get_emergency_fund", arguments={}))
+        elif any(w in q_lower for w in ("goal", "goals", "saving target")):
+            tool_calls.append(ToolCallSpec(tool_name="get_goals", arguments={}))
+        elif any(w in q_lower for w in ("net worth", "assets", "liabilities")):
+            tool_calls.append(ToolCallSpec(tool_name="get_net_worth", arguments={}))
+        elif any(w in q_lower for w in ("leak", "subscription leak", "cancel subscription")):
+            tool_calls.append(ToolCallSpec(tool_name="get_subscription_leaks", arguments={}))
+        elif any(w in q_lower for w in ("sip", "corpus", "projection", "compound")):
+            tool_calls.append(ToolCallSpec(tool_name="calculate_sip_projection", arguments={}))
+        elif any(w in q_lower for w in ("insurance gap", "life cover", "health cover", "term cover")):
+            tool_calls.append(ToolCallSpec(tool_name="calculate_insurance_gap", arguments={}))
+        elif any(w in q_lower for w in ("tax regime", "old regime", "new regime", "income tax", "80c", "87a")):
+            tool_calls.append(ToolCallSpec(tool_name="compare_tax_regimes", arguments={}))
         elif any(w in q_lower for w in ("budget", "50/30/20", "split")):
             tool_calls.append(ToolCallSpec(tool_name="get_budget_plan", arguments={}))
         else:

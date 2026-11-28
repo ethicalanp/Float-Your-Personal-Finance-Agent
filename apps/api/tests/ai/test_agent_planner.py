@@ -30,8 +30,8 @@ def planner(fake_gateway: LLMGateway) -> AgentPlanner:
 
 
 def test_allowed_tool_catalogue_contains_11_tools() -> None:
-    """Verify exactly 11 registered tools in the planning catalogue."""
-    assert len(ALLOWED_TOOL_CATALOGUE) == 11
+    """Verify exactly 19 registered tools in the planning catalogue."""
+    assert len(ALLOWED_TOOL_CATALOGUE) == 19
     expected = [
         "get_spending_summary",
         "get_category_breakdown",
@@ -40,10 +40,18 @@ def test_allowed_tool_catalogue_contains_11_tools() -> None:
         "list_recurring_payments",
         "get_borrow_readiness",
         "get_budget_plan",
+        "get_health_score",
+        "get_goals",
+        "get_emergency_fund",
+        "get_subscription_leaks",
+        "get_net_worth",
         "check_scam_message",
         "draft_complaint",
         "get_verified_contacts",
         "search_knowledge",
+        "calculate_sip_projection",
+        "calculate_insurance_gap",
+        "compare_tax_regimes",
     ]
     for tool_name in expected:
         assert tool_name in ALLOWED_TOOL_CATALOGUE

@@ -23,6 +23,7 @@ from app.models.admin import AdminUser
 from app.models.borrow import BorrowAssessment
 from app.models.budget import BudgetPlan
 from app.models.conversations import Conversation, Message
+from app.models.goals import EmergencyFundConfig, Goal
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import (
@@ -36,6 +37,11 @@ from app.models.recurring import (
     RecurringCommitment,
     RecurringNotification,
     RecurringOccurrence,
+)
+from app.models.subscriptions_networth import (
+    NetWorthItem,
+    NetWorthSnapshot,
+    SubscriptionLeakDecision,
 )
 from app.models.user import (
     AuthAuditLog,
@@ -66,11 +72,16 @@ APP_TABLES = [
     RecurringNotification.__table__,
     BorrowAssessment.__table__,
     BudgetPlan.__table__,
+    Goal.__table__,
+    EmergencyFundConfig.__table__,
     AdminUser.__table__,
     Conversation.__table__,
     Message.__table__,
     KnowledgeDocument.__table__,
     KnowledgeChunk.__table__,
+    SubscriptionLeakDecision.__table__,
+    NetWorthItem.__table__,
+    NetWorthSnapshot.__table__,
 ]
 
 
@@ -119,6 +130,30 @@ def app(settings: Settings) -> FastAPI:
 @pytest.fixture
 def client(app: FastAPI) -> TestClient:
     return TestClient(app)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def hermetic_default_db(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
+    """Never read a stale local dev.db file when PFA_DATABASE_URL is unset."""
+    db_url = os.environ.get("PFA_DATABASE_URL", "").strip()
+    if db_url and "dev.db" not in db_url:
+        yield
+        return
+
+    db_file = tmp_path_factory.mktemp("hermetic_db") / "test_hermetic.db"
+    os.environ["PFA_DATABASE_URL"] = f"sqlite+aiosqlite:///{db_file.as_posix()}"
+    from app.core.config import get_settings
+    from app.db.session import Base, get_async_engine, get_async_session_factory, get_sync_engine
+
+    get_settings.cache_clear()
+    get_async_engine.cache_clear()
+    get_async_session_factory.cache_clear()
+    get_sync_engine.cache_clear()
+
+    sync_eng = get_sync_engine()
+    Base.metadata.create_all(sync_eng, tables=APP_TABLES)
+    yield
+    sync_eng.dispose()
 
 
 @pytest.fixture(autouse=True)

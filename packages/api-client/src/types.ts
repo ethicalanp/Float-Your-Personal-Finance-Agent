@@ -472,3 +472,273 @@ export interface RecurringSuggestionItem {
   confidence: "high" | "medium";
   detected_occurrences_count: number;
 }
+
+export interface SipCalculatorRequest {
+  monthly_sip_paise: number;
+  lumpsum_paise?: number;
+  years: number;
+  expected_return_pct?: number;
+  adjust_for_inflation?: boolean;
+  inflation_pct?: number;
+}
+
+export interface SipScenarioOut {
+  label: string;
+  annual_return_pct: string;
+  nominal_corpus_paise: number;
+  real_corpus_paise: number;
+  total_invested_paise: number;
+  nominal_gain_paise: number;
+}
+
+export interface SipProjectionResponse {
+  monthly_sip_paise: number;
+  lumpsum_paise: number;
+  years: number;
+  expected_return_pct: string;
+  adjust_for_inflation: boolean;
+  inflation_pct: string;
+  total_invested_paise: number;
+  projected_nominal_paise: number;
+  projected_real_paise: number;
+  illustrative_scenarios: SipScenarioOut[];
+  assumptions: string[];
+  disclaimer: string;
+}
+
+export interface InsuranceGapRequest {
+  annual_income_paise: number;
+  dependants: number;
+  existing_life_cover_paise: number;
+  existing_health_cover_paise: number;
+  liabilities_paise?: number;
+}
+
+export interface InsuranceGapResponse {
+  annual_income_paise: number;
+  dependants: number;
+  existing_life_cover_paise: number;
+  recommended_life_cover_paise: number;
+  life_cover_gap_paise: number;
+  life_status: "covered" | "gap" | "no_dependants_note";
+  existing_health_cover_paise: number;
+  recommended_health_cover_paise: number;
+  health_cover_gap_paise: number;
+  health_status: "covered" | "gap";
+  assumptions: string[];
+  disclaimer: string;
+}
+
+export interface TaxCompareRequest {
+  gross_income_paise: number;
+  is_salaried?: boolean;
+  deduction_80c_paise?: number;
+  deduction_80d_paise?: number;
+  other_deductions_paise?: number;
+}
+
+export interface RegimeBreakdownOut {
+  regime: string;
+  gross_income_paise: number;
+  total_deductions_paise: number;
+  taxable_income_paise: number;
+  slab_tax_paise: number;
+  rebate_87a_paise: number;
+  cess_paise: number;
+  total_tax_paise: number;
+}
+
+export interface TaxComparisonResponse {
+  version: string;
+  financial_year: string;
+  as_of: string;
+  source_url: string;
+  verified: boolean;
+  needs_verified_parameters: boolean;
+  old_regime: RegimeBreakdownOut;
+  new_regime: RegimeBreakdownOut;
+  lower_tax_regime: "old" | "new" | "equal";
+  estimated_difference_paise: number;
+  educational_notice: string;
+}
+
+// --- Float Health Score Types ---
+export interface HealthScoreComponent {
+  key: string;
+  label: string;
+  status: "available" | "insufficient_data";
+  score?: number | null;
+  weight: number;
+  value_display: string;
+  why: string;
+  educational_tip: string;
+}
+
+export interface FloatPathStep {
+  priority: number;
+  pillar: "Protect" | "Plan" | "Borrow-ready";
+  title: string;
+  why: string;
+  href: string;
+}
+
+export interface HealthScoreHistoryPoint {
+  recorded_at: string;
+  score?: number | null;
+  band: string;
+  formula_version: string;
+}
+
+export interface HealthScoreResponse {
+  formula_version: string;
+  month: string;
+  overall_score?: number | null;
+  band: "strong" | "steady" | "building" | "needs_attention" | "insufficient_data";
+  confidence: "high" | "medium" | "low";
+  available_components: number;
+  total_components: number;
+  has_essential_insurance?: boolean | null;
+  components: HealthScoreComponent[];
+  best_next_action?: FloatPathStep | null;
+  float_path: FloatPathStep[];
+  history: HealthScoreHistoryPoint[];
+  delta_from_previous?: number | null;
+  version_changed: boolean;
+  disclaimer: string;
+}
+
+export interface HealthInsuranceFlagRequest {
+  has_essential_insurance: boolean | null;
+}
+
+// --- Goals & Emergency Fund Types ---
+export interface GoalItemOut {
+  id: string;
+  name: string;
+  target_amount_paise: number;
+  saved_paise: number;
+  over_saved_paise: number;
+  remaining_paise: number;
+  target_date: string;
+  priority: number;
+  version: number;
+  months_remaining: number;
+  is_past_due: boolean;
+  is_funded: boolean;
+  suggested_monthly_paise: number;
+  allocated_monthly_paise: number;
+  feasible: boolean;
+  progress_pct: number;
+}
+
+export interface GoalsOverviewResponse {
+  ist_month: string;
+  budget_savings_paise?: number | null;
+  total_suggested_monthly_paise: number;
+  has_allocation_conflict: boolean;
+  shortfall_paise: number;
+  goals: GoalItemOut[];
+}
+
+export interface CreateGoalRequest {
+  name: string;
+  target_amount_paise: number;
+  saved_paise?: number;
+  target_date: string;
+  priority?: number;
+}
+
+export interface UpdateGoalRequest {
+  name?: string;
+  target_amount_paise?: number;
+  saved_paise?: number;
+  target_date?: string;
+  priority?: number;
+  expected_version?: number;
+}
+
+export interface EmergencyFundResponse {
+  ist_month: string;
+  target_months: number;
+  needs_paise: number;
+  essential_recurring_paise: number;
+  essential_monthly_paise: number;
+  target_amount_paise: number;
+  saved_paise: number;
+  liquid_accounts_paise: number;
+  effective_saved_paise: number;
+  over_saved_paise: number;
+  remaining_paise: number;
+  progress_pct: number;
+  version: number;
+}
+
+export interface UpdateEmergencyFundRequest {
+  target_months: number;
+  saved_paise: number;
+  expected_version?: number;
+}
+
+// --- Subscriptions & Net Worth Types ---
+export interface SubscriptionLeakItem {
+  leak_key: string;
+  merchant: string;
+  rules_triggered: string[];
+  monthly_amount_paise: number;
+  annual_cost_paise: number;
+  decision: "undecided" | "keep" | "cancel";
+  explanation: string;
+}
+
+export interface SubscriptionLeaksResponse {
+  total_leaks: number;
+  estimated_yearly_savings_paise: number;
+  potential_yearly_savings_paise: number;
+  leaks: SubscriptionLeakItem[];
+}
+
+export interface NetWorthItem {
+  id: string;
+  name: string;
+  item_type: "asset" | "liability";
+  category: string;
+  amount_paise: number;
+  version: number;
+  valued_at: string;
+  is_stale: boolean;
+  days_since_update: number;
+}
+
+export interface NetWorthSnapshot {
+  id: string;
+  snapshot_date: string;
+  total_assets_paise: number;
+  total_liabilities_paise: number;
+  net_worth_paise: number;
+}
+
+export interface NetWorthOverviewResponse {
+  total_assets_paise: number;
+  total_liabilities_paise: number;
+  net_worth_paise: number;
+  is_negative: boolean;
+  stale_count: number;
+  items: NetWorthItem[];
+  snapshots: NetWorthSnapshot[];
+}
+
+export interface CreateNetWorthItemRequest {
+  name: string;
+  item_type: "asset" | "liability";
+  category?: string;
+  amount_paise: number;
+  valued_at?: string;
+}
+
+export interface UpdateNetWorthItemRequest {
+  name?: string;
+  category?: string;
+  amount_paise?: number;
+  valued_at?: string;
+  expected_version?: number;
+}
