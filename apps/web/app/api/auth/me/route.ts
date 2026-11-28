@@ -10,8 +10,14 @@ export async function GET() {
   }
 
   try {
-    const client = new FloatApiClient({ token });
-    const profile: any = await client.auth.getProfile();
+    const res = await fetch(`${API_BASE}/api/v1/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return NextResponse.json({ ok: false, error: "Session invalid or expired" }, { status: res.status });
+    }
+    const profile: any = await res.json();
     return NextResponse.json({
       ok: true,
       user_id: profile.user_id ?? profile.id,
