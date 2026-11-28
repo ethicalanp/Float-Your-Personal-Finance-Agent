@@ -32,7 +32,7 @@ from app.services.budget_service import (
     get_ist_month,
 )
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
-from app.services.recurring_service import match_transaction_to_occurrence
+from app.services.recurring_service import match_transactions_bulk
 from app.services.statement_parser import (
     StatementParseError,
     parse_csv_statement,
@@ -210,7 +210,9 @@ async def upload_statement(
     seen_fps = set(existing_fp_res.scalars().all())
 
     imported: list[dict[str, Any]] = []
+    new_tx_objects: list[Transaction] = []
     skipped_count = 0
+    balance_delta = Decimal("0")
 
     for tx in parsed_txs:
         fp = tx["fingerprint"]
@@ -239,17 +241,12 @@ async def upload_statement(
             normalized_fingerprint=fp,
             source=TransactionSource.SMS if is_sms else TransactionSource.CSV_UPLOAD,
         )
-        db.add(new_tx)
-        await db.flush()
+        new_tx_objects.append(new_tx)
 
-        # Update balance
         if t_type == TransactionType.CREDIT:
-            account.reported_balance += amt_decimal
+            balance_delta += amt_decimal
         else:
-            account.reported_balance -= amt_decimal
-
-        if t_type == TransactionType.DEBIT:
-            await match_transaction_to_occurrence(db, current_user.id, new_tx)
+            balance_delta -= amt_decimal
 
         tx_record = {
             "id": str(new_tx.id),
@@ -264,6 +261,12 @@ async def upload_statement(
             "merchant": new_tx.merchant,
         }
         imported.append(tx_record)
+
+    if new_tx_objects:
+        db.add_all(new_tx_objects)
+        await db.flush()
+        account.reported_balance += balance_delta
+        await match_transactions_bulk(db, current_user.id, new_tx_objects)
 
     tx_import.imported_count = len(imported)
     tx_import.duplicates_skipped = skipped_count

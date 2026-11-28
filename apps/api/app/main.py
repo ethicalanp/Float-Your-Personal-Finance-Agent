@@ -5,9 +5,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app import __version__
 from app.api.v1.router import api_router
@@ -65,9 +68,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.state.settings = settings
 
-    # Mount Statement Upload Limit and Request Context Middlewares
+    # Mount Statement Upload Limit, Request Context, CORS, TrustedHost, and ProxyHeaders Middlewares
     application.add_middleware(StatementUploadLimitMiddleware)
     application.add_middleware(RequestContextMiddleware)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins_list,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    )
+    application.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.allowed_hosts_list or ["localhost", "127.0.0.1"],
+    )
+    application.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts=settings.trusted_proxy_hosts_list or ["127.0.0.1"],
+    )
 
     # Global Exception Handlers for Unified Error Format
     @application.exception_handler(AppException)

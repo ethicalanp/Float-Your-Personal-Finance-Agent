@@ -1,6 +1,7 @@
 import csv
 import io
 import re
+import time
 import zlib
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -9,6 +10,19 @@ from typing import Any
 from app.services.categorizer import categorize_transaction
 from app.services.data_sanitizer import mask_sensitive_data
 from app.services.deduplication import compute_transaction_fingerprint
+
+MAX_CSV_BYTES = 10 * 1024 * 1024
+MAX_CSV_ROWS = 60_000
+CSV_PARSE_TIMEOUT_SECONDS = 30.0
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def escape_csv_formula(value: str) -> str:
+    """Prefix spreadsheet formula triggers (=, +, -, @, tab, cr) with a single quote."""
+    if value and value.lstrip().startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
 
 DATE_FORMATS = (
     "%Y-%m-%d",
@@ -143,8 +157,16 @@ def parse_csv_statement_with_diagnostics(
     content: str | bytes,
     account_id: str,
     raise_on_row_error: bool = False,
+    max_bytes: int = MAX_CSV_BYTES,
+    max_rows: int = MAX_CSV_ROWS,
+    timeout_seconds: float = CSV_PARSE_TIMEOUT_SECONDS,
 ) -> StatementParseResult:
-    """Parse CSV/semicolon bank statements with shifted headers, multi-line narrations, and balance validation."""
+    """Parse CSV/semicolon bank statements with size/row/timeout caps, shifted headers, and balance validation."""
+    raw_bytes = content if isinstance(content, bytes) else content.encode("utf-8", errors="replace")
+    if len(raw_bytes) > max_bytes:
+        raise StatementParseError([f"CSV size ({len(raw_bytes)} bytes) exceeds maximum allowed {max_bytes} bytes."])
+
+    parse_start = time.monotonic()
     content_str = decode_statement_bytes(content) if isinstance(content, bytes) else content
     content_str = content_str.lstrip("\ufeff").strip()
     if not content_str:
@@ -155,6 +177,8 @@ def parse_csv_statement_with_diagnostics(
     rows = list(csv.reader(io.StringIO(content_str), delimiter=delimiter))
     if not rows:
         return StatementParseResult()
+    if len(rows) > max_rows:
+        raise StatementParseError([f"CSV row count ({len(rows)}) exceeds maximum allowed {max_rows} rows."])
 
     header_idx = -1
     date_col = -1
@@ -210,6 +234,9 @@ def parse_csv_statement_with_diagnostics(
     mask_cache: dict[str, str] = {}
 
     for offset, row in enumerate(rows[header_idx + 1 :], start=header_idx + 2):
+        if (offset & 255) == 0 or timeout_seconds < 1.0:
+            if time.monotonic() - parse_start > timeout_seconds:
+                raise StatementParseError(["CSV parsing timed out."])
         if not row or all(not c.strip() for c in row):
             continue
 

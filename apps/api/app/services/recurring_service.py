@@ -2,6 +2,7 @@ import calendar
 import math
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
@@ -160,37 +161,14 @@ def _amount_matches(actual: Decimal, comm: RecurringCommitment, occ: RecurringOc
     return abs(actual - expected) <= tolerance
 
 
-async def match_transaction_to_occurrence(
-    db: AsyncSession,
-    user_id: uuid.UUID,
+def _match_transaction_against_rows(
     transaction: Transaction,
-    date_window_days: int = 4,
-    amount_tolerance_pct: Decimal = Decimal("0.05"),
+    rows: Sequence[tuple[RecurringOccurrence, RecurringCommitment]],
+    txn_date: date,
+    date_window_days: int,
+    amount_tolerance_pct: Decimal,
 ) -> RecurringOccurrence | None:
-    """Tag a debit transaction as expected only when merchant + amount + date window (incl. weekend drift) match."""
-    if transaction.transaction_type.value.lower() != "debit":
-        return None
-
-    tx_dt = transaction.transaction_date
-    if tx_dt.tzinfo is None:
-        tx_dt = tx_dt.replace(tzinfo=timezone.utc)
-    txn_date = tx_dt.astimezone(IST_TZ).date()
-    min_date = txn_date - timedelta(days=date_window_days + 3)
-    max_date = txn_date + timedelta(days=date_window_days + 3)
-
-    stmt = (
-        select(RecurringOccurrence, RecurringCommitment)
-        .join(RecurringCommitment, RecurringOccurrence.commitment_id == RecurringCommitment.id)
-        .where(
-            RecurringOccurrence.user_id == user_id,
-            RecurringCommitment.is_active.is_(True),
-            RecurringOccurrence.due_date >= min_date,
-            RecurringOccurrence.due_date <= max_date,
-        )
-    )
-    result = await db.execute(stmt)
-    rows = result.all()
-
+    """Match a single debit transaction against pre-fetched (occurrence, commitment) rows."""
     scored_matches: list[tuple[tuple[int, Decimal, int], RecurringOccurrence, RecurringCommitment, str]] = []
     for occ, comm in rows:
         if comm.start_date and txn_date < comm.start_date:
@@ -239,6 +217,83 @@ async def match_transaction_to_occurrence(
     best_occ.mismatch_reason = None
     transaction.is_recurring = True
     return best_occ
+
+
+async def match_transactions_bulk(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    transactions: Sequence[Transaction],
+    date_window_days: int = 4,
+    amount_tolerance_pct: Decimal = Decimal("0.05"),
+) -> int:
+    """Match a batch of debit transactions against recurring occurrences using a single DB query."""
+    debit_pairs: list[tuple[Transaction, date]] = []
+    for tx in transactions:
+        if tx.transaction_type.value.lower() != "debit":
+            continue
+        tx_dt = tx.transaction_date
+        if tx_dt.tzinfo is None:
+            tx_dt = tx_dt.replace(tzinfo=timezone.utc)
+        debit_pairs.append((tx, tx_dt.astimezone(IST_TZ).date()))
+
+    if not debit_pairs:
+        return 0
+
+    min_date = min(d for _, d in debit_pairs) - timedelta(days=date_window_days + 3)
+    max_date = max(d for _, d in debit_pairs) + timedelta(days=date_window_days + 3)
+    stmt = (
+        select(RecurringOccurrence, RecurringCommitment)
+        .join(RecurringCommitment, RecurringOccurrence.commitment_id == RecurringCommitment.id)
+        .where(
+            RecurringOccurrence.user_id == user_id,
+            RecurringCommitment.is_active.is_(True),
+            RecurringOccurrence.due_date >= min_date,
+            RecurringOccurrence.due_date <= max_date,
+        )
+    )
+    result = await db.execute(stmt)
+    rows = [(occ, comm) for occ, comm in result.all()]
+    if not rows:
+        return 0
+
+    matched_count = 0
+    for tx, txn_date in debit_pairs:
+        if _match_transaction_against_rows(tx, rows, txn_date, date_window_days, amount_tolerance_pct) is not None:
+            matched_count += 1
+    return matched_count
+
+
+async def match_transaction_to_occurrence(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    transaction: Transaction,
+    date_window_days: int = 4,
+    amount_tolerance_pct: Decimal = Decimal("0.05"),
+) -> RecurringOccurrence | None:
+    """Tag a debit transaction as expected only when merchant + amount + date window (incl. weekend drift) match."""
+    if transaction.transaction_type.value.lower() != "debit":
+        return None
+
+    tx_dt = transaction.transaction_date
+    if tx_dt.tzinfo is None:
+        tx_dt = tx_dt.replace(tzinfo=timezone.utc)
+    txn_date = tx_dt.astimezone(IST_TZ).date()
+    min_date = txn_date - timedelta(days=date_window_days + 3)
+    max_date = txn_date + timedelta(days=date_window_days + 3)
+
+    stmt = (
+        select(RecurringOccurrence, RecurringCommitment)
+        .join(RecurringCommitment, RecurringOccurrence.commitment_id == RecurringCommitment.id)
+        .where(
+            RecurringOccurrence.user_id == user_id,
+            RecurringCommitment.is_active.is_(True),
+            RecurringOccurrence.due_date >= min_date,
+            RecurringOccurrence.due_date <= max_date,
+        )
+    )
+    result = await db.execute(stmt)
+    rows = [(occ, comm) for occ, comm in result.all()]
+    return _match_transaction_against_rows(transaction, rows, txn_date, date_window_days, amount_tolerance_pct)
 
 
 async def evaluate_overdue_occurrences(

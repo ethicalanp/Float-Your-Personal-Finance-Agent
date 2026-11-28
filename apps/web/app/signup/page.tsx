@@ -30,6 +30,7 @@ export default function SignupPage() {
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [privacyAccepted, setPrivacyAccepted] = useState(true);
   const [aiConsent, setAiConsent] = useState(true);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
 
   // Phone form state
   const [phone, setPhone] = useState("+91 ");
@@ -105,6 +106,10 @@ export default function SignupPage() {
 
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!ageConfirmed) {
+      setError("You must confirm that you are 18 years or older to register.");
+      return;
+    }
     if (!termsAccepted || !privacyAccepted) {
       setError("Please accept the Terms of Service and Privacy Policy to continue.");
       return;
@@ -126,6 +131,8 @@ export default function SignupPage() {
           privacy_accepted: privacyAccepted,
           ai_data_processing_consent: aiConsent,
           consent_version: "2026.1",
+          age_confirmed: ageConfirmed,
+          age_confirmation_version: "2026.1",
         }),
       });
 
@@ -146,6 +153,10 @@ export default function SignupPage() {
 
   async function handleRequestOtp(e?: React.FormEvent) {
     if (e) e.preventDefault();
+    if (!ageConfirmed) {
+      setError("You must confirm that you are 18 years or older to register.");
+      return;
+    }
     if (!termsAccepted || !privacyAccepted) {
       setError("Please accept the Terms of Service and Privacy Policy to continue.");
       return;
@@ -395,6 +406,18 @@ export default function SignupPage() {
                 <label className="flex items-start gap-2.5 text-xs text-mute cursor-pointer select-none">
                   <input
                     type="checkbox"
+                    checked={ageConfirmed}
+                    onChange={(e) => setAgeConfirmed(e.target.checked)}
+                    className="mt-0.5 rounded border-line text-accent focus:ring-accent"
+                  />
+                  <span>
+                    I confirm that I am 18 years of age or older.
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-2.5 text-xs text-mute cursor-pointer select-none">
+                  <input
+                    type="checkbox"
                     checked={aiConsent}
                     onChange={(e) => setAiConsent(e.target.checked)}
                     className="mt-0.5 rounded border-line text-accent focus:ring-accent"
@@ -452,6 +475,18 @@ export default function SignupPage() {
                   </div>
 
                   <div className="space-y-3 pt-2">
+                    <label className="flex items-start gap-2.5 text-xs text-mute cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={ageConfirmed}
+                        onChange={(e) => setAgeConfirmed(e.target.checked)}
+                        className="mt-0.5 rounded border-line text-accent focus:ring-accent"
+                      />
+                      <span>
+                        I confirm that I am 18 years of age or older.
+                      </span>
+                    </label>
+
                     <label className="flex items-start gap-2.5 text-xs text-mute cursor-pointer select-none">
                       <input
                         type="checkbox"

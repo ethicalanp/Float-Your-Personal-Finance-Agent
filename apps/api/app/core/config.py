@@ -71,6 +71,23 @@ class Settings(BaseSettings):
     # Float.ai chat streaming flag
     enable_chat_streaming: bool = False
 
+    # Host, proxy, and CORS security configuration
+    allowed_hosts: str = "localhost,127.0.0.1,testserver"
+    trusted_proxy_hosts: str = "127.0.0.1,::1"
+    cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def allowed_hosts_list(self) -> list[str]:
+        return [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]
+
+    @property
+    def trusted_proxy_hosts_list(self) -> list[str]:
+        return [h.strip() for h in self.trusted_proxy_hosts.split(",") if h.strip()]
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
     @field_validator("admin_enabled", "debug", "enable_synthetic_ml_demos", mode="before")
     @classmethod
     def _strip_bool_strings(cls, v: Any) -> Any:
@@ -118,6 +135,17 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "PFA_DATABASE_URL must be configured with a PostgreSQL URL (postgresql+psycopg://) in production"
                 )
+            if not self.allowed_hosts_list or "*" in self.allowed_hosts_list:
+                raise ValueError("PFA_ALLOWED_HOSTS must be a non-empty explicit host allowlist in production")
+            if "*" in self.cors_allowed_origins_list:
+                raise ValueError("PFA_CORS_ALLOWED_ORIGINS must not contain wildcard '*' in production")
+            if self.admin_enabled:
+                admin_secret = self.admin_session_secret_key.get_secret_value() if self.admin_session_secret_key else ""
+                if not admin_secret or len(admin_secret) < 32 or admin_secret == INSECURE_DEV_JWT_SECRET:
+                    raise ValueError(
+                        "PFA_ADMIN_SESSION_SECRET_KEY must be a cryptographically strong secret (min 32 chars) "
+                        "when PFA_ADMIN_ENABLED=true in production"
+                    )
         return self
 
 
