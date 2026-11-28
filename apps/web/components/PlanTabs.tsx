@@ -2,7 +2,7 @@
 
 import { useRef, type KeyboardEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Landmark, PieChart, Repeat, Scissors, Shield, Target } from "lucide-react";
+import { Calculator, Landmark, PieChart, Repeat, Scissors, Shield, Target } from "lucide-react";
 
 interface PlanTabsProps {
   tabsLabel?: string;
@@ -12,12 +12,28 @@ interface PlanTabsProps {
   emergencyLabel?: string;
   subscriptionsLabel?: string;
   netWorthLabel?: string;
+  calculatorsLabel?: string;
   onBeforeNavigate?: () => void;
 }
 
-type TabKey = "budget" | "recurring" | "goals" | "emergency" | "subscriptions" | "net-worth";
+type TabKey =
+  | "budget"
+  | "recurring"
+  | "goals"
+  | "emergency"
+  | "subscriptions"
+  | "net-worth"
+  | "calculators";
 
-const TAB_ORDER: TabKey[] = ["budget", "recurring", "goals", "emergency", "subscriptions", "net-worth"];
+const TAB_ORDER: TabKey[] = [
+  "budget",
+  "recurring",
+  "goals",
+  "emergency",
+  "subscriptions",
+  "net-worth",
+  "calculators",
+];
 
 export default function PlanTabs({
   tabsLabel = "Plan sections",
@@ -27,6 +43,7 @@ export default function PlanTabs({
   emergencyLabel = "Emergency fund",
   subscriptionsLabel = "Subscriptions",
   netWorthLabel = "Net worth",
+  calculatorsLabel = "Calculators",
   onBeforeNavigate,
 }: PlanTabsProps) {
   const pathname = usePathname();
@@ -38,6 +55,7 @@ export default function PlanTabs({
     emergency: null,
     subscriptions: null,
     "net-worth": null,
+    calculators: null,
   });
 
   const activeTab: TabKey = pathname.startsWith("/plan/recurring")
@@ -50,7 +68,9 @@ export default function PlanTabs({
           ? "subscriptions"
           : pathname.startsWith("/plan/net-worth")
             ? "net-worth"
-            : "budget";
+            : pathname.startsWith("/plan/calculators")
+              ? "calculators"
+              : "budget";
 
   const tabs: { key: TabKey; href: string; label: string; Icon: typeof PieChart }[] = [
     { key: "budget", href: "/plan", label: budgetLabel, Icon: PieChart },
@@ -59,6 +79,7 @@ export default function PlanTabs({
     { key: "emergency", href: "/plan/emergency-fund", label: emergencyLabel, Icon: Shield },
     { key: "subscriptions", href: "/plan/subscriptions", label: subscriptionsLabel, Icon: Scissors },
     { key: "net-worth", href: "/plan/net-worth", label: netWorthLabel, Icon: Landmark },
+    { key: "calculators", href: "/plan/calculators", label: calculatorsLabel, Icon: Calculator },
   ];
 
   function navigateTo(target: TabKey) {
@@ -93,7 +114,7 @@ export default function PlanTabs({
       aria-label={tabsLabel}
       onKeyDown={handleKeyDown}
       data-testid="plan-tablist"
-      className="grid grid-cols-2 sm:inline-flex sm:w-auto w-full rounded-2xl border border-line bg-soft/60 p-1 gap-1"
+      className="grid grid-cols-2 sm:inline-flex sm:flex-wrap sm:w-auto w-full rounded-2xl border border-line bg-soft/60 p-1 gap-1"
     >
       {tabs.map(({ key, label, Icon }) => {
         const isActive = activeTab === key;

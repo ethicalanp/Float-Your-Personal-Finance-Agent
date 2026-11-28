@@ -902,6 +902,7 @@ async def handle_get_upcoming_bills(ctx: ToolContext, args: UpcomingBillsInput) 
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 class HealthScoreInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="IST month YYYY-MM")
@@ -1096,10 +1097,57 @@ async def handle_get_emergency_fund(ctx: ToolContext, args: EmergencyFundToolInp
                 unit="percent",
                 period=ef.ist_month,
             ),
+=======
+class SipProjectionToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    monthly_sip_inr: Decimal = Field(Decimal("5000"), ge=Decimal("0"), le=Decimal("10000000"))
+    lumpsum_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000000"))
+    years: int = Field(10, ge=1, le=50)
+    expected_return_pct: Decimal = Field(Decimal("10"), ge=Decimal("0"), le=Decimal("30"))
+    adjust_for_inflation: bool = True
+    inflation_pct: Decimal = Field(Decimal("6"), ge=Decimal("0"), le=Decimal("20"))
+
+
+class SipProjectionToolData(BaseModel):
+    total_invested_inr: Decimal
+    projected_nominal_inr: Decimal
+    projected_real_inr: Decimal
+    disclaimer: str
+
+
+async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionToolInput) -> ToolResult:
+    from app.services.calculators_service import calculate_sip_projection
+
+    res = calculate_sip_projection(
+        monthly_sip_paise=int((args.monthly_sip_inr * 100).to_integral_value()),
+        lumpsum_paise=int((args.lumpsum_inr * 100).to_integral_value()),
+        years=args.years,
+        expected_return_pct=args.expected_return_pct,
+        adjust_for_inflation=args.adjust_for_inflation,
+        inflation_pct=args.inflation_pct,
+    )
+    inv_inr = paise_to_rupees(res.total_invested_paise)
+    nom_inr = paise_to_rupees(res.projected_nominal_paise)
+    real_inr = paise_to_rupees(res.projected_real_paise)
+    return ToolResult(
+        ok=True,
+        tool="calculate_sip_projection",
+        data=SipProjectionToolData(
+            total_invested_inr=inv_inr,
+            projected_nominal_inr=nom_inr,
+            projected_real_inr=real_inr,
+            disclaimer=res.disclaimer,
+        ).model_dump(),
+        facts=[
+            Fact(id="sip_invested_inr", label="Total Invested", value=str(inv_inr), unit="INR"),
+            Fact(id="sip_nominal_inr", label="Illustrative Nominal Corpus", value=str(nom_inr), unit="INR"),
+            Fact(id="sip_real_inr", label="Illustrative Inflation-Adjusted Corpus", value=str(real_inr), unit="INR"),
+>>>>>>> feature/calculators
         ],
     )
 
 
+<<<<<<< HEAD
 class SubscriptionLeaksInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1140,10 +1188,59 @@ async def handle_get_subscription_leaks(ctx: ToolContext, args: SubscriptionLeak
                 value=str(pot_inr),
                 unit="INR",
             ),
+=======
+class InsuranceGapToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    annual_income_inr: Decimal = Field(Decimal("600000"), ge=Decimal("0"), le=Decimal("100000000"))
+    dependants: int = Field(1, ge=0, le=20)
+    existing_life_cover_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("1000000000"))
+    existing_health_cover_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000000"))
+    liabilities_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000000"))
+
+
+class InsuranceGapToolData(BaseModel):
+    recommended_life_cover_inr: Decimal
+    life_cover_gap_inr: Decimal
+    recommended_health_cover_inr: Decimal
+    health_cover_gap_inr: Decimal
+    disclaimer: str
+
+
+async def handle_calculate_insurance_gap(ctx: ToolContext, args: InsuranceGapToolInput) -> ToolResult:
+    from app.services.calculators_service import calculate_insurance_gap
+
+    res = calculate_insurance_gap(
+        annual_income_paise=int((args.annual_income_inr * 100).to_integral_value()),
+        dependants=args.dependants,
+        existing_life_cover_paise=int((args.existing_life_cover_inr * 100).to_integral_value()),
+        existing_health_cover_paise=int((args.existing_health_cover_inr * 100).to_integral_value()),
+        liabilities_paise=int((args.liabilities_inr * 100).to_integral_value()),
+    )
+    rec_l = paise_to_rupees(res.recommended_life_cover_paise)
+    gap_l = paise_to_rupees(res.life_cover_gap_paise)
+    rec_h = paise_to_rupees(res.recommended_health_cover_paise)
+    gap_h = paise_to_rupees(res.health_cover_gap_paise)
+    return ToolResult(
+        ok=True,
+        tool="calculate_insurance_gap",
+        data=InsuranceGapToolData(
+            recommended_life_cover_inr=rec_l,
+            life_cover_gap_inr=gap_l,
+            recommended_health_cover_inr=rec_h,
+            health_cover_gap_inr=gap_h,
+            disclaimer=res.disclaimer,
+        ).model_dump(),
+        facts=[
+            Fact(id="ins_rec_life_inr", label="Heuristic Life Cover", value=str(rec_l), unit="INR"),
+            Fact(id="ins_gap_life_inr", label="Life Cover Gap", value=str(gap_l), unit="INR"),
+            Fact(id="ins_rec_health_inr", label="Heuristic Health Cover", value=str(rec_h), unit="INR"),
+            Fact(id="ins_gap_health_inr", label="Health Cover Gap", value=str(gap_h), unit="INR"),
+>>>>>>> feature/calculators
         ],
     )
 
 
+<<<<<<< HEAD
 class NetWorthInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1190,11 +1287,61 @@ async def handle_get_net_worth(ctx: ToolContext, args: NetWorthInput) -> ToolRes
             Fact(id="net_worth_liabilities_inr", label="Total Liabilities", value=str(liab_inr), unit="INR"),
             Fact(id="net_worth_inr", label="Net Worth", value=str(nw_inr), unit="INR"),
             Fact(id="net_worth_stale_count", label="Stale Items", value=str(ov.stale_count), unit="count"),
+=======
+class TaxCompareToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    gross_income_inr: Decimal = Field(Decimal("1200000"), ge=Decimal("0"), le=Decimal("100000000"))
+    is_salaried: bool = True
+    deduction_80c_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("150000"))
+    deduction_80d_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000"))
+
+
+class TaxCompareToolData(BaseModel):
+    financial_year: str
+    as_of: str
+    source_url: str
+    old_regime_tax_inr: Decimal
+    new_regime_tax_inr: Decimal
+    lower_tax_regime: str
+    educational_notice: str
+
+
+async def handle_compare_tax_regimes(ctx: ToolContext, args: TaxCompareToolInput) -> ToolResult:
+    from app.services.calculators_service import compare_tax_regimes
+
+    res = compare_tax_regimes(
+        gross_income_paise=int((args.gross_income_inr * 100).to_integral_value()),
+        is_salaried=args.is_salaried,
+        deduction_80c_paise=int((args.deduction_80c_inr * 100).to_integral_value()),
+        deduction_80d_paise=int((args.deduction_80d_inr * 100).to_integral_value()),
+    )
+    old_t = paise_to_rupees(res.old_regime.total_tax_paise)
+    new_t = paise_to_rupees(res.new_regime.total_tax_paise)
+    return ToolResult(
+        ok=True,
+        tool="compare_tax_regimes",
+        data=TaxCompareToolData(
+            financial_year=res.financial_year,
+            as_of=res.as_of,
+            source_url=res.source_url,
+            old_regime_tax_inr=old_t,
+            new_regime_tax_inr=new_t,
+            lower_tax_regime=res.lower_tax_regime,
+            educational_notice=res.educational_notice,
+        ).model_dump(),
+        facts=[
+            Fact(id="tax_old_inr", label="Old Regime Tax", value=str(old_t), unit="INR"),
+            Fact(id="tax_new_inr", label="New Regime Tax", value=str(new_t), unit="INR"),
+            Fact(id="tax_lower_regime", label="Lower Tax Regime", value=res.lower_tax_regime, unit="label"),
+>>>>>>> feature/calculators
         ],
     )
 
 
+<<<<<<< HEAD
 >>>>>>> feature/subscriptions-networth
+=======
+>>>>>>> feature/calculators
 # ============================================================================
 # Tool Specifications and Registration
 # ============================================================================
@@ -1293,6 +1440,7 @@ def register_financial_tools() -> None:
             handler=handle_get_upcoming_bills,
         ),
         Tool(
+        Tool(
             name="get_health_score",
             description=(
                 "Compute the deterministic, versioned Float Health Score (0-100), 6 component statuses "
@@ -1341,6 +1489,36 @@ def register_financial_tools() -> None:
             input_model=NetWorthInput,
             output_model=NetWorthToolData,
             handler=handle_get_net_worth,
+        ),
+        Tool(
+            name="calculate_sip_projection",
+            description=(
+                "Educational SIP and lumpsum projection calculator with illustrative return range "
+                "(8%, 10%, 12%, not a guarantee) and optional inflation adjustment."
+            ),
+            input_model=SipProjectionToolInput,
+            output_model=SipProjectionToolData,
+            handler=handle_calculate_sip_projection,
+        ),
+        Tool(
+            name="calculate_insurance_gap",
+            description=(
+                "Educational insurance gap check heuristic for life and health cover based on "
+                "annual income, dependants, and existing cover. No product recommendations."
+            ),
+            input_model=InsuranceGapToolInput,
+            output_model=InsuranceGapToolData,
+            handler=handle_calculate_insurance_gap,
+        ),
+        Tool(
+            name="compare_tax_regimes",
+            description=(
+                "Educational comparison of Old vs New Indian income tax regimes using versioned "
+                "parameters with source URL and as_of date. Not tax advice or filing."
+            ),
+            input_model=TaxCompareToolInput,
+            output_model=TaxCompareToolData,
+            handler=handle_compare_tax_regimes,
         ),
     ]
 

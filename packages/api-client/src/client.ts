@@ -15,12 +15,12 @@ import type {
   ConsentUpdateRequest,
   ConversationPurgeResponse,
   CreateAccountRequest,
-  CreateNetWorthItemRequest,
   DeclareCommitmentRequest,
+  InsuranceGapRequest,
+  InsuranceGapResponse,
   KnowledgeAnswerResponse,
   KnowledgeQuestionRequest,
   LoginRequest,
-  NetWorthOverviewResponse,
   RecoveryCaseCreateRequest,
   RecoveryCaseResponse,
   RecoveryCaseUpdateRequest,
@@ -29,10 +29,12 @@ import type {
   RegisterRequest,
   ScamCheckRequest,
   ScamCheckResponse,
+  SipCalculatorRequest,
+  SipProjectionResponse,
   StatementUploadSummary,
-  SubscriptionLeaksResponse,
+  TaxCompareRequest,
+  TaxComparisonResponse,
   UpdateCommitmentRequest,
-  UpdateNetWorthItemRequest,
   UploadStatementRequest,
   UserProfileResponse,
   VerifiedContact,
@@ -286,52 +288,22 @@ export class FloatApiClient {
         body: JSON.stringify(data),
       }),
 
-    getSubscriptionLeaks: (): Promise<SubscriptionLeaksResponse> =>
-      this.request<SubscriptionLeaksResponse>("/api/v1/plan/subscriptions/leaks", {
-        method: "GET",
-      }),
-
-    setSubscriptionLeakDecision: (
-      leakKey: string,
-      decision: "keep" | "cancel"
-    ): Promise<SubscriptionLeaksResponse> =>
-      this.request<SubscriptionLeaksResponse>(
-        `/api/v1/plan/subscriptions/leaks/${encodeURIComponent(leakKey)}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({ decision }),
-        }
-      ),
-
-    getNetWorth: (): Promise<NetWorthOverviewResponse> =>
-      this.request<NetWorthOverviewResponse>("/api/v1/plan/net-worth", {
-        method: "GET",
-      }),
-
-    createNetWorthItem: (data: CreateNetWorthItemRequest): Promise<NetWorthOverviewResponse> =>
-      this.request<NetWorthOverviewResponse>("/api/v1/plan/net-worth/items", {
+    calculateSip: (data: SipCalculatorRequest): Promise<SipProjectionResponse> =>
+      this.request<SipProjectionResponse>("/api/v1/plan/calculators/sip", {
         method: "POST",
         body: JSON.stringify(data),
       }),
 
-    updateNetWorthItem: (
-      itemId: string,
-      data: UpdateNetWorthItemRequest
-    ): Promise<NetWorthOverviewResponse> =>
-      this.request<NetWorthOverviewResponse>(`/api/v1/plan/net-worth/items/${itemId}`, {
-        method: "PUT",
+    calculateInsuranceGap: (data: InsuranceGapRequest): Promise<InsuranceGapResponse> =>
+      this.request<InsuranceGapResponse>("/api/v1/plan/calculators/insurance-gap", {
+        method: "POST",
         body: JSON.stringify(data),
       }),
 
-    deleteNetWorthItem: (itemId: string): Promise<NetWorthOverviewResponse> =>
-      this.request<NetWorthOverviewResponse>(`/api/v1/plan/net-worth/items/${itemId}`, {
-        method: "DELETE",
-      }),
-
-    createNetWorthSnapshot: (snapshotDate?: string): Promise<NetWorthOverviewResponse> =>
-      this.request<NetWorthOverviewResponse>("/api/v1/plan/net-worth/snapshots", {
+    compareTaxRegimes: (data: TaxCompareRequest): Promise<TaxComparisonResponse> =>
+      this.request<TaxComparisonResponse>("/api/v1/plan/calculators/tax-compare", {
         method: "POST",
-        body: JSON.stringify(snapshotDate ? { snapshot_date: snapshotDate } : {}),
+        body: JSON.stringify(data),
       }),
   };
 

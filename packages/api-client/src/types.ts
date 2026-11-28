@@ -473,65 +473,91 @@ export interface RecurringSuggestionItem {
   detected_occurrences_count: number;
 }
 
-export interface SubscriptionLeakItem {
-  leak_key: string;
-  merchant: string;
-  rules_triggered: string[];
-  monthly_amount_paise: number;
-  annual_cost_paise: number;
-  decision: "undecided" | "keep" | "cancel";
-  explanation: string;
+export interface SipCalculatorRequest {
+  monthly_sip_paise: number;
+  lumpsum_paise?: number;
+  years: number;
+  expected_return_pct?: number;
+  adjust_for_inflation?: boolean;
+  inflation_pct?: number;
 }
 
-export interface SubscriptionLeaksResponse {
-  total_leaks: number;
-  estimated_yearly_savings_paise: number;
-  potential_yearly_savings_paise: number;
-  leaks: SubscriptionLeakItem[];
+export interface SipScenarioOut {
+  label: string;
+  annual_return_pct: string;
+  nominal_corpus_paise: number;
+  real_corpus_paise: number;
+  total_invested_paise: number;
+  nominal_gain_paise: number;
 }
 
-export interface NetWorthItem {
-  id: string;
-  name: string;
-  item_type: "asset" | "liability";
-  category: string;
-  amount_paise: number;
-  version: number;
-  valued_at: string;
-  is_stale: boolean;
-  days_since_update: number;
+export interface SipProjectionResponse {
+  monthly_sip_paise: number;
+  lumpsum_paise: number;
+  years: number;
+  expected_return_pct: string;
+  adjust_for_inflation: boolean;
+  inflation_pct: string;
+  total_invested_paise: number;
+  projected_nominal_paise: number;
+  projected_real_paise: number;
+  illustrative_scenarios: SipScenarioOut[];
+  assumptions: string[];
+  disclaimer: string;
 }
 
-export interface NetWorthSnapshot {
-  id: string;
-  snapshot_date: string;
-  total_assets_paise: number;
-  total_liabilities_paise: number;
-  net_worth_paise: number;
+export interface InsuranceGapRequest {
+  annual_income_paise: number;
+  dependants: number;
+  existing_life_cover_paise: number;
+  existing_health_cover_paise: number;
+  liabilities_paise?: number;
 }
 
-export interface NetWorthOverviewResponse {
-  total_assets_paise: number;
-  total_liabilities_paise: number;
-  net_worth_paise: number;
-  is_negative: boolean;
-  stale_count: number;
-  items: NetWorthItem[];
-  snapshots: NetWorthSnapshot[];
+export interface InsuranceGapResponse {
+  annual_income_paise: number;
+  dependants: number;
+  existing_life_cover_paise: number;
+  recommended_life_cover_paise: number;
+  life_cover_gap_paise: number;
+  life_status: "covered" | "gap" | "no_dependants_note";
+  existing_health_cover_paise: number;
+  recommended_health_cover_paise: number;
+  health_cover_gap_paise: number;
+  health_status: "covered" | "gap";
+  assumptions: string[];
+  disclaimer: string;
 }
 
-export interface CreateNetWorthItemRequest {
-  name: string;
-  item_type: "asset" | "liability";
-  category?: string;
-  amount_paise: number;
-  valued_at?: string;
+export interface TaxCompareRequest {
+  gross_income_paise: number;
+  is_salaried?: boolean;
+  deduction_80c_paise?: number;
+  deduction_80d_paise?: number;
+  other_deductions_paise?: number;
 }
 
-export interface UpdateNetWorthItemRequest {
-  name?: string;
-  category?: string;
-  amount_paise?: number;
-  valued_at?: string;
-  expected_version?: number;
+export interface RegimeBreakdownOut {
+  regime: string;
+  gross_income_paise: number;
+  total_deductions_paise: number;
+  taxable_income_paise: number;
+  slab_tax_paise: number;
+  rebate_87a_paise: number;
+  cess_paise: number;
+  total_tax_paise: number;
+}
+
+export interface TaxComparisonResponse {
+  version: string;
+  financial_year: string;
+  as_of: string;
+  source_url: string;
+  verified: boolean;
+  needs_verified_parameters: boolean;
+  old_regime: RegimeBreakdownOut;
+  new_regime: RegimeBreakdownOut;
+  lower_tax_regime: "old" | "new" | "equal";
+  estimated_difference_paise: number;
+  educational_notice: string;
 }

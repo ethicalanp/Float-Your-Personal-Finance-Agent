@@ -28,10 +28,13 @@ from app.ai.tools.financial_tools import (
     EmergencyFundToolInput,
     GoalsToolInput,
     HealthScoreInput,
+    InsuranceGapToolInput,
     ListRecurringPaymentsInput,
     NetWorthInput,
+    SipProjectionToolInput,
     SpendingSummaryInput,
     SubscriptionLeaksInput,
+    TaxCompareToolInput,
 )
 from app.models.protect import AuditTrail
 
@@ -54,6 +57,9 @@ ALLOWED_TOOL_CATALOGUE = {
     "draft_complaint": DraftComplaintInput,
     "get_verified_contacts": GetVerifiedContactsInput,
     "search_knowledge": SearchKnowledgeInput,
+    "calculate_sip_projection": SipProjectionToolInput,
+    "calculate_insurance_gap": InsuranceGapToolInput,
+    "compare_tax_regimes": TaxCompareToolInput,
 }
 
 MAX_STEPS = 4
@@ -227,6 +233,12 @@ def create_deterministic_plan(route: RouteClass, query: str) -> OrchestratorPlan
             tool_calls.append(ToolCallSpec(tool_name="get_net_worth", arguments={}))
         elif any(w in q_lower for w in ("leak", "subscription leak", "cancel subscription")):
             tool_calls.append(ToolCallSpec(tool_name="get_subscription_leaks", arguments={}))
+        elif any(w in q_lower for w in ("sip", "corpus", "projection", "compound")):
+            tool_calls.append(ToolCallSpec(tool_name="calculate_sip_projection", arguments={}))
+        elif any(w in q_lower for w in ("insurance gap", "life cover", "health cover", "term cover")):
+            tool_calls.append(ToolCallSpec(tool_name="calculate_insurance_gap", arguments={}))
+        elif any(w in q_lower for w in ("tax regime", "old regime", "new regime", "income tax", "80c", "87a")):
+            tool_calls.append(ToolCallSpec(tool_name="compare_tax_regimes", arguments={}))
         elif any(w in q_lower for w in ("budget", "50/30/20", "split")):
             tool_calls.append(ToolCallSpec(tool_name="get_budget_plan", arguments={}))
         else:
