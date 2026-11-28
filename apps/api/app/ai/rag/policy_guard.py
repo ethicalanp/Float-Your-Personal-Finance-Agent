@@ -1,11 +1,62 @@
+import base64
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
 from app.ai.rag.embedder.base import BaseEmbedder
 from app.ai.rag.embedder.fake import FakeEmbedder
 from app.ai.rag.smoke import cosine_similarity
+
+_CONFUSABLES = str.maketrans(
+    {
+        "\u0430": "a",
+        "\u0435": "e",
+        "\u043e": "o",
+        "\u0440": "p",
+        "\u0441": "c",
+        "\u0443": "y",
+        "\u0445": "x",
+        "\u0456": "i",
+        "\u0455": "s",
+        "\u0410": "A",
+        "\u0412": "B",
+        "\u0415": "E",
+        "\u041a": "K",
+        "\u041c": "M",
+        "\u041d": "H",
+        "\u041e": "O",
+        "\u0420": "P",
+        "\u0421": "C",
+        "\u0422": "T",
+        "\u0425": "X",
+    }
+)
+_ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u00ad]")
+_BASE64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{16,}={0,2}(?![A-Za-z0-9+/=])")
+_SPACED_LETTERS_RE = re.compile(r"(?<=\b[A-Za-z])\s+(?=[A-Za-z]\b)")
+
+
+def _normalize_variants(text: str) -> list[str]:
+    """Produce normalized text variants to catch homoglyphs, zero-width chars, spaced letters, and base64."""
+    variants = [text]
+    stripped = _ZERO_WIDTH_RE.sub("", text)
+    nfkc = unicodedata.normalize("NFKC", stripped).translate(_CONFUSABLES)
+    if nfkc != text:
+        variants.append(nfkc)
+    de_spaced = _SPACED_LETTERS_RE.sub("", nfkc)
+    if de_spaced != nfkc:
+        variants.append(de_spaced)
+    for token in _BASE64_TOKEN_RE.findall(stripped):
+        try:
+            decoded = base64.b64decode(token, validate=True).decode("utf-8", errors="ignore").strip()
+            if decoded and sum(ch.isprintable() for ch in decoded) / max(len(decoded), 1) > 0.85:
+                variants.append(decoded)
+        except Exception:
+            continue
+    return variants
+
 
 logger = logging.getLogger("app.ai.rag.policy_guard")
 
@@ -95,7 +146,7 @@ class PolicyGuard:
             "investment_advice",
         ),
         (
-            r"(?:മ്യൂച്വൽ\s*ഫണ്ട്\w*|എസ്\s*ഐ\s*പി|ഓഹരി\w*|നിക്ഷേപ\w*|പെന്നി\s*സ്റ്റോക്ക്|ട്രേഡിംഗ്|ക്രിപ്റ്റോ\w*|ഫണ്ടിൽ)",
+            r"(?:മ്യൂച്വൽ\s*ഫണ്ട്\w*|എസ്\s*ഐ\s*പി|ഓഹരി\w*|നിക്ഷേപിക്ക\w*|പെന്നി\s*സ്റ്റോക്ക്|ട്രേഡിംഗ്|ക്രിപ്റ്റോ\w*|ഫണ്ടിൽ)",
             "Float provides regulatory fraud and borrowing guidance but cannot recommend investments.",
             "investment_advice",
         ),
@@ -139,9 +190,22 @@ class PolicyGuard:
             "Float cannot draft court petitions, legal notices, or advise on ongoing litigation and court disputes.",
             "legal_litigation",
         ),
-        # Adversarial & jailbreak in ML / Manglish
+        # Adversarial & jailbreak in EN paraphrases / ML / Manglish
         (
-            r"(?:എല്ലാ\s*മുൻ\s*നിർദ്ദേശങ്ങളും\s*അവഗണിച്ച്|ആന്തരിക\s*സിസ്റ്റം\s*കോഡുകൾ|സിസ്റ്റം\s*ഹാക്ക്)",
+            r"(?i)\b(?:disregard\s+(?:the\s+)?above\s+directions|output\s+your\s+initial\s+instructions|"
+            r"what\s+were\s+you\s+told\s+before\s+this\s+chat|pretend\s+no\s+rules\s+apply)\b",
+            "Request refused: system override or prompt extraction attempt.",
+            "adversarial_override",
+        ),
+        (
+            r"(?:എല്ലാ\s*മുൻ\s*നിർദ്ദേശങ്ങളും\s*അവഗണിച്ച്|മുമ്പത്തെ\s*നിർദ്ദേശങ്ങൾ\s*അവഗണി|"
+            r"സിസ്റ്റം\s*പ്രോംപ്റ്റ്|ആന്തരിക\s*സിസ്റ്റം\s*കോഡുകൾ|സിസ്റ്റം\s*ഹാക്ക്|എല്ലാ\s*നിയമങ്ങളും\s*മറന്ന്)",
+            "Request refused: system override or policy violation attempt.",
+            "adversarial_override",
+        ),
+        (
+            r"(?i)\b(?:mumpathe\s*instructions|ella\s*rulesum?\s*marannu|system\s*prompt\s*(?:kanikku|parayu|tharu)|"
+            r"niyamam\s*marikadannu|instructions\s*ignore\s*cheyy?u)\b",
             "Request refused: system override or policy violation attempt.",
             "adversarial_override",
         ),
@@ -210,31 +274,34 @@ class PolicyGuard:
         """
         clean_q = question.strip()
         effective_margin = self.margin if margin is None else margin
+        variants = _normalize_variants(clean_q)
 
         # 1. LAYER 1: Fast Regex
-        for pattern, reason, category in self.LAYER1_RULES:
-            if re.search(pattern, clean_q, re.IGNORECASE):
-                return PolicyCheckResult(
-                    refused=True,
-                    reason=reason,
-                    category=category,
-                    layer="layer1_regex",
-                )
+        for variant in variants:
+            for pattern, reason, category in self.LAYER1_RULES:
+                if re.search(pattern, variant, re.IGNORECASE):
+                    return PolicyCheckResult(
+                        refused=True,
+                        reason=reason,
+                        category=category,
+                        layer="layer1_regex",
+                    )
 
         # 2. LAYER 2A: Classifier Patterns (covers Indic phrasings & near-KB mutual funds/tax/legal)
         is_scam_report = bool(
             re.search(r"(?:തട്ടിപ്\w*|scam|fraud|ചതി\w*|കംപ്ലയിന്റ?\w*|പണം\s*പോയി|പൈസ\s*പോയി)", clean_q, re.IGNORECASE)
         )
-        for pattern, reason, category in self.LAYER2_INTENT_PATTERNS:
-            if category == "investment_advice" and is_scam_report:
-                continue
-            if re.search(pattern, clean_q, re.IGNORECASE):
-                return PolicyCheckResult(
-                    refused=True,
-                    reason=reason,
-                    category=category,
-                    layer="layer2_classifier",
-                )
+        for variant in variants:
+            for pattern, reason, category in self.LAYER2_INTENT_PATTERNS:
+                if category == "investment_advice" and is_scam_report:
+                    continue
+                if re.search(pattern, variant, re.IGNORECASE):
+                    return PolicyCheckResult(
+                        refused=True,
+                        reason=reason,
+                        category=category,
+                        layer="layer2_classifier",
+                    )
 
         # 3. LAYER 2B: Semantic Embedding Exemplars (calibrated with margin over KB similarity)
         exemplar_vectors = self._get_exemplar_vectors()

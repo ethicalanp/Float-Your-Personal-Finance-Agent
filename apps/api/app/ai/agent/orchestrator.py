@@ -31,6 +31,7 @@ from app.ai.gateway.manager import LLMGateway
 from app.ai.observability.metrics import assistant_metrics
 from app.ai.rag.answer_models import Citation
 from app.ai.rag.dependencies import get_embedder
+from app.ai.rag.policy_guard import PolicyGuard
 from app.ai.rag.retrieval import HybridRetriever, RetrievalConfig
 from app.ai.rag.validator import AnswerValidator
 from app.ai.security.masking import mask_pii
@@ -134,6 +135,19 @@ class AssistantOrchestrator:
         state = AgentState.MASK
         masked_query = mask_pii(request.question)
         lang = detect_query_language(masked_query)
+
+        policy_res = PolicyGuard().check(masked_query, language_hint=lang)
+        if policy_res.refused:
+            assistant_metrics.inc("pfa_assistant_requests_total", route="out_of_scope", status="refusal", lang=lang)
+            return AssistantChatResponse(
+                status="refusal",
+                answer=policy_res.reason or "This request is outside the scope of this assistant.",
+                language=lang,
+                route=RouteClass.OUT_OF_SCOPE,
+                confidence="high",
+                trace_id=trace_id,
+                prompt_version=prompt_version,
+            )
 
         # --------------------------------------------------------------------
         # 3. ROUTE

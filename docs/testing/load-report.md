@@ -36,3 +36,11 @@
    - Evidence: Baseline `db_down` injection returned `200` on `/ready` and `500` on `/api/v1/plan/cash-flow`. Fixed in [health.py](file:///d:/PersonalFinanceAgent/apps/api/app/api/v1/health.py) and [main.py](file:///d:/PersonalFinanceAgent/apps/api/app/main.py), verified by [test_db_failure_503.py](file:///d:/PersonalFinanceAgent/apps/api/tests/test_db_failure_503.py).
 3. **Home Bundle Query Fan-Out (`15.0` SQL queries/req)**:
    - Evidence: Fetching `cash-flow`, `budget`, and `reminders` sequentially runs `15` queries (`3` auth/consent lookups + `12` domain queries).
+
+## 4. Real Embedder (`intfloat/multilingual-e5-base`) Load & Memory Benchmark
+- **Test**: `pytest -s -m real_embedder tests/ai/test_real_embedder_load.py` (CPU, local HuggingFace cache).
+- **Cold Load + First Query**: `49,581.0 ms` (~49.6s, includes `torch`/`sentence-transformers` import + model load).
+- **Warm Query Latency**: `p50 = 178.3 ms`, `p95 = 302.9 ms` (`n = 5` EN/ML/Manglish queries).
+- **Batch-16 Passage Embedding**: `664.9 ms` (`41.6 ms/passage`).
+- **Peak Traced Memory (`tracemalloc`)**: `1,409.12 MB` (~1.41 GB).
+- **Note on CSV Upload N+1**: Fixed in `apps/api/app/api/v1/plan.py` + `apps/api/app/services/recurring_service.py` (`match_transactions_bulk`), verified by constant-query-count regression test `test_upload_statement_avoids_n_plus_1_queries`.
