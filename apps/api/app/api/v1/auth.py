@@ -32,6 +32,7 @@ from app.models.enums import (
 )
 from app.models.user import AuthToken, Consent, User, UserIdentity, UserSession
 from app.services.auth_audit import log_auth_event
+from app.services.auth_lockout import lockout_tracker
 from app.services.google_auth import verify_google_id_token
 from app.services.phone_service import (
     ensure_utc,
@@ -66,6 +67,8 @@ class RegisterRequest(BaseModel):
     privacy_accepted: bool = False
     ai_data_processing_consent: bool = False
     consent_version: str = "v1.0"
+    age_confirmed: bool | None = None
+    age_confirmation_version: str = "v1.0"
 
 
 class LoginRequest(BaseModel):
@@ -260,6 +263,9 @@ async def register(
     client_ip, user_agent = _get_request_meta(request)
     normalized_email = str(req.email).lower().strip()
 
+    if req.age_confirmed is False:
+        raise ValidationException("You must confirm that you are 18 years or older to register.")
+
     result = await db.execute(select(User).where(User.normalized_email == normalized_email))
     if result.scalar_one_or_none() is not None:
         raise ConflictException("A user with this email address already exists.")
@@ -316,6 +322,16 @@ async def register(
                 ip_address_mask=masked_ip,
             )
         )
+    if req.age_confirmed is True:
+        db.add(
+            Consent(
+                user_id=user.id,
+                consent_type=ConsentType.AGE_18_PLUS,
+                consent_version=req.age_confirmation_version,
+                granted_at=now,
+                ip_address_mask=masked_ip,
+            )
+        )
 
     access_token, refresh_token, _ = await create_user_session(
         db=db,
@@ -358,23 +374,39 @@ async def login(
     client_ip, user_agent = _get_request_meta(request)
     normalized_email = str(req.email).lower().strip()
 
-    result = await db.execute(select(User).where(User.normalized_email == normalized_email))
-    user = result.scalar_one_or_none()
-
-    if user is None or not user.hashed_password or not verify_password(req.password, user.hashed_password):
+    is_locked, lock_scope = lockout_tracker.is_login_locked(normalized_email, client_ip)
+    if is_locked:
         await log_auth_event(
             db=db,
             event_type=AuthAuditEventType.LOGIN_FAILURE,
             identifier=normalized_email,
             ip_address=client_ip,
             user_agent=user_agent,
-            metadata={"reason": "bad_credentials"},
+            metadata={"reason": "locked_out", "scope": lock_scope},
+        )
+        await db.commit()
+        raise UnauthorizedException("Invalid email or password.")
+
+    result = await db.execute(select(User).where(User.normalized_email == normalized_email))
+    user = result.scalar_one_or_none()
+
+    if user is None or not user.hashed_password or not verify_password(req.password, user.hashed_password):
+        delay = lockout_tracker.record_login_failure(normalized_email, client_ip)
+        await log_auth_event(
+            db=db,
+            event_type=AuthAuditEventType.LOGIN_FAILURE,
+            identifier=normalized_email,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            metadata={"reason": "bad_credentials", "lockout_delay_s": delay},
         )
         await db.commit()
         raise UnauthorizedException("Invalid email or password.")
 
     if not user.is_active:
         raise UnauthorizedException("User account is inactive.")
+
+    lockout_tracker.clear_login_account(normalized_email)
 
     access_token, refresh_token, _ = await create_user_session(
         db=db,
@@ -815,6 +847,22 @@ async def request_password_reset(
     client_ip, user_agent = _get_request_meta(request)
     normalized_email = str(req.email).lower().strip()
 
+    is_locked, lock_scope = lockout_tracker.is_reset_locked(normalized_email, client_ip)
+    if is_locked:
+        await log_auth_event(
+            db=db,
+            event_type=AuthAuditEventType.PASSWORD_RESET_REQUEST,
+            identifier=normalized_email,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            metadata={"reason": "rate_limited", "scope": lock_scope},
+        )
+        await db.commit()
+        return MessageResponse(
+            message="If this email is registered, a password reset link has been sent.",
+        )
+
+    lockout_tracker.record_reset_request(normalized_email, client_ip)
     user_res = await db.execute(select(User).where(User.normalized_email == normalized_email))
     user = user_res.scalar_one_or_none()
 
@@ -890,6 +938,7 @@ async def confirm_password_reset(
 
     # Revoke ALL active sessions immediately upon password change
     await revoke_all_user_sessions(db, user_match.id)
+    lockout_tracker.unlock_via_reset(user_match.normalized_email)
 
     await log_auth_event(
         db=db,
@@ -898,6 +947,7 @@ async def confirm_password_reset(
         identifier=user_match.normalized_email,
         ip_address=client_ip,
         user_agent=user_agent,
+        metadata={"unlocked": True},
     )
     await db.commit()
 

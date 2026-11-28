@@ -49,7 +49,7 @@ from app.services.goals_service import (
     compute_goals_overview,
 )
 from app.services.health_score_service import FORMULA_VERSION, HealthScoreResponse, compute_health_score
-from app.services.recurring_service import match_transaction_to_occurrence
+from app.services.recurring_service import match_transactions_bulk
 from app.services.statement_parser import (
     StatementParseError,
     parse_csv_statement,
@@ -233,7 +233,9 @@ async def upload_statement(
     seen_fps = set(existing_fp_res.scalars().all())
 
     imported: list[dict[str, Any]] = []
+    new_tx_objects: list[Transaction] = []
     skipped_count = 0
+    balance_delta = Decimal("0")
 
     for tx in parsed_txs:
         fp = tx["fingerprint"]
@@ -262,17 +264,12 @@ async def upload_statement(
             normalized_fingerprint=fp,
             source=TransactionSource.SMS if is_sms else TransactionSource.CSV_UPLOAD,
         )
-        db.add(new_tx)
-        await db.flush()
+        new_tx_objects.append(new_tx)
 
-        # Update balance
         if t_type == TransactionType.CREDIT:
-            account.reported_balance += amt_decimal
+            balance_delta += amt_decimal
         else:
-            account.reported_balance -= amt_decimal
-
-        if t_type == TransactionType.DEBIT:
-            await match_transaction_to_occurrence(db, current_user.id, new_tx)
+            balance_delta -= amt_decimal
 
         tx_record = {
             "id": str(new_tx.id),
@@ -287,6 +284,12 @@ async def upload_statement(
             "merchant": new_tx.merchant,
         }
         imported.append(tx_record)
+
+    if new_tx_objects:
+        db.add_all(new_tx_objects)
+        await db.flush()
+        account.reported_balance += balance_delta
+        await match_transactions_bulk(db, current_user.id, new_tx_objects)
 
     tx_import.imported_count = len(imported)
     tx_import.duplicates_skipped = skipped_count
@@ -1020,12 +1023,19 @@ async def create_net_worth_snapshot_endpoint(
 
 
 class SipCalculatorRequest(BaseModel):
-    monthly_sip_paise: int = Field(..., ge=0, le=10_000_000_00)
+    mode: Literal["forward", "reverse"] = "forward"
+    monthly_sip_paise: int = Field(0, ge=0, le=10_000_000_00)
+    target_amount_paise: int | None = Field(default=None, gt=0, le=1_000_000_000_00)
     lumpsum_paise: int = Field(0, ge=0, le=100_000_000_00)
     years: int = Field(..., ge=1, le=50)
     expected_return_pct: Decimal = Field(Decimal("10"), ge=Decimal("0"), le=Decimal("30"))
+    step_up_type: Literal["none", "percent", "amount"] = "none"
+    step_up_interval_months: Literal[1, 2, 3, 6, 12] = 12
+    step_up_percent: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+    step_up_amount_paise: int = Field(0, ge=0, le=10_000_000_00)
     adjust_for_inflation: bool = True
     inflation_pct: Decimal = Field(Decimal("6"), ge=Decimal("0"), le=Decimal("20"))
+    max_income_share_pct: Decimal = Field(Decimal("50"), gt=Decimal("0"), le=Decimal("100"))
 
 
 class InsuranceGapRequest(BaseModel):
@@ -1047,8 +1057,19 @@ class TaxCompareRequest(BaseModel):
 @router.post("/calculators/sip", response_model=SipProjectionResponse)
 async def sip_calculator_endpoint(
     req: SipCalculatorRequest,
-    _current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
 ) -> SipProjectionResponse:
+    if req.mode == "reverse" and (req.target_amount_paise is None or req.target_amount_paise <= 0):
+        raise BadRequestException("Target amount must be greater than 0 for reverse SIP mode.")
+    budget_res = await db.execute(
+        select(BudgetPlan)
+        .where(BudgetPlan.user_id == current_user.id, BudgetPlan.is_current.is_(True))
+        .order_by(BudgetPlan.updated_at.desc())
+        .limit(1)
+    )
+    budget = budget_res.scalar_one_or_none()
+    monthly_income_paise = (budget.monthly_income_paise + budget.extra_income_paise) if budget is not None else None
     return calculate_sip_projection(
         monthly_sip_paise=req.monthly_sip_paise,
         lumpsum_paise=req.lumpsum_paise,
@@ -1056,6 +1077,14 @@ async def sip_calculator_endpoint(
         expected_return_pct=req.expected_return_pct,
         adjust_for_inflation=req.adjust_for_inflation,
         inflation_pct=req.inflation_pct,
+        mode=req.mode,
+        target_amount_paise=req.target_amount_paise,
+        step_up_type=req.step_up_type,
+        step_up_interval_months=req.step_up_interval_months,
+        step_up_percent=req.step_up_percent,
+        step_up_amount_paise=req.step_up_amount_paise,
+        monthly_income_paise=monthly_income_paise,
+        max_income_share_pct=req.max_income_share_pct,
     )
 
 

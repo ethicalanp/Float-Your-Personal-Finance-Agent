@@ -10,19 +10,27 @@ import type {
   SipProjectionResponse,
   TaxComparisonResponse,
 } from "@float/api-client";
-import { formatINR } from "@/lib/i18n";
+import { formatINR, getActiveLanguage, getTranslation } from "@/lib/i18n";
 
 export default function PlanCalculatorsPage() {
   const [hideAmounts, setHideAmounts] = useState(false);
+  const [t, setT] = useState(() => getTranslation("en"));
   const [error, setError] = useState<string | null>(null);
 
   // 1. SIP state
+  const [sipMode, setSipMode] = useState<"forward" | "reverse">("forward");
   const [monthlySip, setMonthlySip] = useState("10000");
+  const [targetAmount, setTargetAmount] = useState("5000000");
   const [lumpsum, setLumpsum] = useState("0");
   const [years, setYears] = useState("10");
   const [returnPct, setReturnPct] = useState("10");
+  const [stepUpType, setStepUpType] = useState<"none" | "percent" | "amount">("none");
+  const [stepUpInterval, setStepUpInterval] = useState<1 | 2 | 3 | 6 | 12>(12);
+  const [stepUpPercent, setStepUpPercent] = useState("5");
+  const [stepUpAmount, setStepUpAmount] = useState("500");
   const [adjustInflation, setAdjustInflation] = useState(true);
   const [inflationPct, setInflationPct] = useState("6");
+  const [sipValidationError, setSipValidationError] = useState<string | null>(null);
   const [sipRes, setSipRes] = useState<SipProjectionResponse | null>(null);
 
   // 2. Insurance gap state
@@ -44,6 +52,7 @@ export default function PlanCalculatorsPage() {
 
   useEffect(() => {
     setHideAmounts(localStorage.getItem("float_hide_amounts") === "true");
+    setT(getTranslation(getActiveLanguage()));
     const onPrivacy = (e: any) => {
       if (typeof e.detail?.hide === "boolean") setHideAmounts(e.detail.hide);
     };
@@ -54,14 +63,70 @@ export default function PlanCalculatorsPage() {
   async function runSip(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setSipValidationError(null);
+
+    const yrNum = Number(years);
+    const retNum = Number(returnPct);
+    const infNum = Number(inflationPct);
+    const lumpNum = Number(lumpsum || "0");
+    if (!years.trim() || Number.isNaN(yrNum) || !Number.isInteger(yrNum) || yrNum < 1 || yrNum > 50) {
+      setSipValidationError("Horizon must be a whole number between 1 and 50 years.");
+      return;
+    }
+    if (!returnPct.trim() || Number.isNaN(retNum) || retNum < 0 || retNum > 30) {
+      setSipValidationError("Expected annual return must be between 0% and 30%.");
+      return;
+    }
+    if (Number.isNaN(lumpNum) || lumpNum < 0) {
+      setSipValidationError("Lumpsum amount cannot be negative.");
+      return;
+    }
+    if (adjustInflation && (Number.isNaN(infNum) || infNum < 0 || infNum > 20)) {
+      setSipValidationError("Inflation rate must be between 0% and 20%.");
+      return;
+    }
+    if (sipMode === "forward") {
+      const sipNum = Number(monthlySip);
+      if (!monthlySip.trim() || Number.isNaN(sipNum) || sipNum < 0) {
+        setSipValidationError("Monthly SIP must be 0 or a positive amount.");
+        return;
+      }
+    } else {
+      const tgtNum = Number(targetAmount);
+      if (!targetAmount.trim() || Number.isNaN(tgtNum) || tgtNum <= 0) {
+        setSipValidationError("Target maturity amount must be greater than ₹0.");
+        return;
+      }
+    }
+    if (stepUpType === "percent") {
+      const sp = Number(stepUpPercent);
+      if (Number.isNaN(sp) || sp < 0 || sp > 100) {
+        setSipValidationError("Step-up percentage must be between 0% and 100%.");
+        return;
+      }
+    }
+    if (stepUpType === "amount") {
+      const sa = Number(stepUpAmount);
+      if (Number.isNaN(sa) || sa < 0) {
+        setSipValidationError("Step-up fixed amount cannot be negative.");
+        return;
+      }
+    }
+
     try {
       const res = await api.plan.calculateSip({
-        monthly_sip_paise: Math.round(Number(monthlySip || 0) * 100),
-        lumpsum_paise: Math.round(Number(lumpsum || 0) * 100),
-        years: Number(years || 1),
-        expected_return_pct: Number(returnPct || 10),
+        mode: sipMode,
+        monthly_sip_paise: sipMode === "forward" ? Math.round(Number(monthlySip) * 100) : 0,
+        target_amount_paise: sipMode === "reverse" ? Math.round(Number(targetAmount) * 100) : undefined,
+        lumpsum_paise: Math.round(lumpNum * 100),
+        years: yrNum,
+        expected_return_pct: retNum,
+        step_up_type: stepUpType,
+        step_up_interval_months: stepUpInterval,
+        step_up_percent: stepUpType === "percent" ? Number(stepUpPercent || 0) : 0,
+        step_up_amount_paise: stepUpType === "amount" ? Math.round(Number(stepUpAmount || 0) * 100) : 0,
         adjust_for_inflation: adjustInflation,
-        inflation_pct: Number(inflationPct || 6),
+        inflation_pct: infNum || 0,
       });
       setSipRes(res);
     } catch (err: any) {
@@ -124,55 +189,176 @@ export default function PlanCalculatorsPage() {
 
         <section id="panel-calculators" role="tabpanel" aria-labelledby="tab-calculators" className="space-y-6">
           {/* 1. SIP & Projection Calculator */}
-          <form onSubmit={runSip} className="rounded-2xl border border-line bg-card p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-accent" />
-              <h2 className="text-lg font-semibold text-ink">1. SIP & projection calculator</h2>
+          <form onSubmit={runSip} noValidate className="rounded-2xl border border-line bg-card p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-accent" />
+                <h2 className="text-lg font-semibold text-ink">1. SIP & projection calculator</h2>
+              </div>
+              <div className="inline-flex rounded-xl border border-line bg-soft p-1 gap-1" role="group" aria-label="SIP calculator mode">
+                <button
+                  type="button"
+                  data-testid="sip-mode-forward"
+                  onClick={() => {
+                    setSipMode("forward");
+                    setSipValidationError(null);
+                  }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    sipMode === "forward" ? "bg-card text-ink shadow-sm" : "text-mute hover:text-ink"
+                  }`}
+                >
+                  Forward projection
+                </button>
+                <button
+                  type="button"
+                  data-testid="sip-mode-reverse"
+                  onClick={() => {
+                    setSipMode("reverse");
+                    setSipValidationError(null);
+                  }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    sipMode === "reverse" ? "bg-card text-ink shadow-sm" : "text-mute hover:text-ink"
+                  }`}
+                >
+                  Target SIP (Reverse)
+                </button>
+              </div>
             </div>
+
+            <p className="text-xs text-mute" data-testid="sip-convention">
+              Convention: monthly compounding at annual/12, contributions at the start of each month, step-up applied at the start of each block. Educational & illustrative only — not a guarantee or advice; taxes and fees ignored.
+            </p>
+
+            {sipValidationError && (
+              <div role="alert" data-testid="sip-validation-error" className="rounded-xl border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">
+                {sipValidationError}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <label className="text-xs text-mute space-y-1">
-                <span>Monthly SIP (₹)</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={monthlySip}
-                  onChange={(e) => setMonthlySip(e.target.value)}
-                  className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
-                />
-              </label>
+              {sipMode === "forward" ? (
+                <label className="text-xs text-mute space-y-1">
+                  <span>Monthly SIP (₹)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    data-testid="sip-monthly-input"
+                    value={monthlySip}
+                    onChange={(e) => setMonthlySip(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+              ) : (
+                <label className="text-xs text-mute space-y-1">
+                  <span>Target maturity amount (₹)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    data-testid="sip-target-input"
+                    value={targetAmount}
+                    onChange={(e) => setTargetAmount(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+              )}
               <label className="text-xs text-mute space-y-1">
                 <span>Lumpsum (₹)</span>
                 <input
                   type="number"
                   min="0"
+                  step="0.01"
+                  data-testid="sip-lumpsum-input"
                   value={lumpsum}
                   onChange={(e) => setLumpsum(e.target.value)}
                   className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
                 />
               </label>
               <label className="text-xs text-mute space-y-1">
-                <span>Horizon (years)</span>
+                <span>Horizon (years, 1–50)</span>
                 <input
                   type="number"
                   min="1"
                   max="50"
+                  data-testid="sip-years-input"
                   value={years}
                   onChange={(e) => setYears(e.target.value)}
                   className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
                 />
               </label>
               <label className="text-xs text-mute space-y-1">
-                <span>Illustrative return (% p.a.)</span>
+                <span>Illustrative return (% p.a., 0–30)</span>
                 <input
                   type="number"
                   min="0"
                   max="30"
                   step="0.5"
+                  data-testid="sip-return-input"
                   value={returnPct}
                   onChange={(e) => setReturnPct(e.target.value)}
                   className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
                 />
               </label>
+              <label className="text-xs text-mute space-y-1">
+                <span>Step-up type</span>
+                <select
+                  data-testid="sip-stepup-type"
+                  value={stepUpType}
+                  onChange={(e) => setStepUpType(e.target.value as "none" | "percent" | "amount")}
+                  className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
+                >
+                  <option value="none">No step-up (plain SIP)</option>
+                  <option value="percent">Percentage step-up (%)</option>
+                  <option value="amount">Fixed ₹ amount step-up</option>
+                </select>
+              </label>
+              {stepUpType !== "none" && (
+                <label className="text-xs text-mute space-y-1">
+                  <span>Step-up every (months)</span>
+                  <select
+                    data-testid="sip-stepup-interval"
+                    value={stepUpInterval}
+                    onChange={(e) => setStepUpInterval(Number(e.target.value) as 1 | 2 | 3 | 6 | 12)}
+                    className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
+                  >
+                    <option value={1}>Every 1 month</option>
+                    <option value={2}>Every 2 months</option>
+                    <option value={3}>Every 3 months</option>
+                    <option value={6}>Every 6 months</option>
+                    <option value={12}>Every 12 months</option>
+                  </select>
+                </label>
+              )}
+              {stepUpType === "percent" && (
+                <label className="text-xs text-mute space-y-1">
+                  <span>Step-up by (%)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    data-testid="sip-stepup-percent"
+                    value={stepUpPercent}
+                    onChange={(e) => setStepUpPercent(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+              )}
+              {stepUpType === "amount" && (
+                <label className="text-xs text-mute space-y-1">
+                  <span>Step-up by (₹)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    data-testid="sip-stepup-amount"
+                    value={stepUpAmount}
+                    onChange={(e) => setStepUpAmount(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+              )}
               <label className="text-xs text-mute space-y-1">
                 <span>Inflation (% p.a.)</span>
                 <input
@@ -181,6 +367,7 @@ export default function PlanCalculatorsPage() {
                   max="20"
                   step="0.5"
                   disabled={!adjustInflation}
+                  data-testid="sip-inflation-input"
                   value={inflationPct}
                   onChange={(e) => setInflationPct(e.target.value)}
                   className="w-full rounded-xl border border-line bg-soft px-3 py-2 text-sm text-ink disabled:opacity-50"
@@ -189,10 +376,11 @@ export default function PlanCalculatorsPage() {
               <label className="flex items-center gap-2 text-xs text-ink pt-5">
                 <input
                   type="checkbox"
+                  data-testid="sip-inflation-toggle"
                   checked={adjustInflation}
                   onChange={(e) => setAdjustInflation(e.target.checked)}
                 />
-                <span>Adjust for inflation</span>
+                <span>Adjust for inflation (real value)</span>
               </label>
             </div>
             <button
@@ -204,28 +392,107 @@ export default function PlanCalculatorsPage() {
             </button>
 
             {sipRes && (
-              <div className="space-y-3 pt-2 border-t border-line" data-testid="sip-result">
+              <div className="space-y-4 pt-3 border-t border-line" data-testid="sip-result">
                 <p className="text-xs font-medium text-warn">{sipRes.disclaimer}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="rounded-xl bg-soft p-3">
+                {sipRes.mode === "reverse" && sipRes.required_starting_sip_paise !== null && sipRes.required_starting_sip_paise !== undefined && (
+                  <div className="rounded-xl border border-accent/40 bg-accent/10 p-3" data-testid="sip-required-starting">
+                    <p className="text-xs text-mute">Required starting monthly SIP</p>
+                    <p className="text-lg font-bold text-ink">
+                      {formatINR(sipRes.required_starting_sip_paise / 100, { hideAmount: hideAmounts })}
+                    </p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="rounded-xl bg-soft p-3" data-testid="sip-total-invested">
                     <p className="text-xs text-mute">Total invested</p>
                     <p className="text-base font-bold text-ink">
-                      {formatINR(sipRes.total_invested_paise / 100, { hideAmount: hideAmounts, compact: true })}
+                      {formatINR(sipRes.total_invested_paise / 100, { hideAmount: hideAmounts })}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-soft p-3">
-                    <p className="text-xs text-mute">Projected nominal</p>
+                  <div className="rounded-xl bg-soft p-3" data-testid="sip-estimated-returns">
+                    <p className="text-xs text-mute">Estimated returns</p>
+                    <p className="text-base font-bold text-ok">
+                      {formatINR(sipRes.estimated_returns_paise / 100, { hideAmount: hideAmounts })}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-soft p-3" data-testid="sip-maturity-nominal">
+                    <p className="text-xs text-mute">Maturity value (nominal)</p>
                     <p className="text-base font-bold text-ink">
-                      {formatINR(sipRes.projected_nominal_paise / 100, { hideAmount: hideAmounts, compact: true })}
+                      {formatINR(sipRes.projected_nominal_paise / 100, { hideAmount: hideAmounts })}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-soft p-3">
-                    <p className="text-xs text-mute">Inflation-adjusted</p>
-                    <p className="text-base font-bold text-accent">
-                      {formatINR(sipRes.projected_real_paise / 100, { hideAmount: hideAmounts, compact: true })}
+                  <div className="rounded-xl bg-soft p-3" data-testid="sip-maturity-real">
+                    <p className="text-xs text-mute">
+                      {sipRes.adjust_for_inflation ? "Real value (inflation-adj.)" : "Extra from step-up"}
+                    </p>
+                    <p className="text-base font-bold text-accent" data-testid="sip-extra-stepup">
+                      {formatINR(
+                        (sipRes.adjust_for_inflation ? sipRes.projected_real_paise : sipRes.extra_from_stepup_paise) / 100,
+                        { hideAmount: hideAmounts },
+                      )}
                     </p>
                   </div>
                 </div>
+                {sipRes.mode === "forward" && sipRes.unrealistic_contribution_warning && (
+                  <div
+                    role="status"
+                    data-testid="sip-unrealistic-warning"
+                    className="rounded-xl border border-warn/50 bg-warn/10 px-3 py-2 text-xs text-ink space-y-0.5"
+                  >
+                    <p className="font-semibold text-warn">{t.calculators.stepUpWarningTitle}</p>
+                    <p>
+                      {t.calculators.stepUpWarningBody
+                        .replace(
+                          "{amount}",
+                          formatINR(sipRes.final_monthly_contribution_paise / 100, { hideAmount: hideAmounts }),
+                        )
+                        .replace("{year}", String(sipRes.final_monthly_contribution_year))}
+                    </p>
+                  </div>
+                )}
+                {sipRes.extra_from_stepup_paise > 0 && (
+                  <div className="rounded-xl border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ink" data-testid="sip-stepup-delta">
+                    Extra from step-up vs plain SIP:{" "}
+                    <strong>{formatINR(sipRes.extra_from_stepup_paise / 100, { hideAmount: hideAmounts })}</strong>{" "}
+                    (plain SIP maturity:{" "}
+                    {formatINR(sipRes.plain_sip_nominal_paise / 100, { hideAmount: hideAmounts })})
+                  </div>
+                )}
+
+                {/* Invested vs Value chart */}
+                {sipRes.yearly_schedule && sipRes.yearly_schedule.length > 0 && (
+                  <div className="space-y-2" data-testid="sip-chart">
+                    <p className="text-xs font-semibold text-ink">Invested vs projected value by year</p>
+                    <div className="space-y-1.5">
+                      {(() => {
+                        const maxVal = Math.max(...sipRes.yearly_schedule.map((r) => r.nominal_value_paise), 1);
+                        return sipRes.yearly_schedule.map((row) => {
+                          const invPct = Math.round((row.invested_paise / maxVal) * 100);
+                          const valPct = Math.round((row.nominal_value_paise / maxVal) * 100);
+                          return (
+                            <div key={row.year} className="flex items-center gap-2 text-xs">
+                              <span className="w-10 shrink-0 text-mute">Y{row.year}</span>
+                              <div className="flex-1 h-3 rounded-full bg-soft overflow-hidden relative">
+                                <div
+                                  className="h-full bg-accent/50 rounded-full"
+                                  style={{ width: `${valPct}%` }}
+                                />
+                                <div
+                                  className="h-full bg-ink/70 rounded-full absolute top-0 left-0"
+                                  style={{ width: `${invPct}%` }}
+                                />
+                              </div>
+                              <span className="w-28 text-right font-mono text-ink shrink-0">
+                                {formatINR(row.nominal_value_paise / 100, { hideAmount: hideAmounts, compact: true })}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                   {sipRes.illustrative_scenarios.map((sc) => (
                     <div key={sc.label} className="rounded-xl border border-line p-2.5">
@@ -239,6 +506,43 @@ export default function PlanCalculatorsPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Year-wise table */}
+                {sipRes.yearly_schedule && sipRes.yearly_schedule.length > 0 && (
+                  <div className="overflow-x-auto" data-testid="sip-yearly-table">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-line text-mute text-left">
+                          <th className="py-1.5 pr-3">Year</th>
+                          <th className="py-1.5 pr-3">Monthly SIP</th>
+                          <th className="py-1.5 pr-3">Total invested</th>
+                          <th className="py-1.5 pr-3">Returns</th>
+                          <th className="py-1.5">Nominal value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sipRes.yearly_schedule.map((row) => (
+                          <tr key={row.year} className="border-b border-line/50 text-ink">
+                            <td className="py-1.5 pr-3 font-mono">{row.year}</td>
+                            <td className="py-1.5 pr-3 font-mono">
+                              {formatINR(row.monthly_contribution_paise / 100, { hideAmount: hideAmounts })}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono">
+                              {formatINR(row.invested_paise / 100, { hideAmount: hideAmounts })}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-ok">
+                              {formatINR(row.returns_paise / 100, { hideAmount: hideAmounts })}
+                            </td>
+                            <td className="py-1.5 font-mono font-semibold">
+                              {formatINR(row.nominal_value_paise / 100, { hideAmount: hideAmounts })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
                 <ul className="list-disc pl-5 text-xs text-mute space-y-0.5">
                   {sipRes.assumptions.map((a) => (
                     <li key={a}>{a}</li>

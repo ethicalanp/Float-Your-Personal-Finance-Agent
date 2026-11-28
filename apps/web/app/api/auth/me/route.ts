@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { FloatApiClient } from "@float/api-client";
 import { getTokenFromCookies } from "@/lib/auth-cookie";
+
+const API_BASE = process.env.PFA_API_URL || "http://127.0.0.1:8000";
 
 export async function GET() {
   const token = getTokenFromCookies();

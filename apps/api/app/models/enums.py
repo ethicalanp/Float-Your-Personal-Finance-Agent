@@ -7,6 +7,7 @@ class ConsentType(str, Enum):
     TERMS = "terms"
     PRIVACY = "privacy"
     AI_DATA_PROCESSING = "ai_data_processing"
+    AGE_18_PLUS = "age_18_plus"
 
 
 class AuthProvider(str, Enum):

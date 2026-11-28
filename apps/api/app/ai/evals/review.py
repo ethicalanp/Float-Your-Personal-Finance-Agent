@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Sequence
 
 from app.ai.evals.models import CaseSplit, RAGCaseStatus, RAGEvalCase, RAGReviewAction
+from app.services.statement_parser import escape_csv_formula
 
 CSV_FIELDNAMES = [
     "id",
@@ -33,17 +34,17 @@ def export_drafts_to_csv(cases: Sequence[RAGEvalCase], csv_path: Path | str) -> 
         for c in cases:
             writer.writerow(
                 {
-                    "id": c.id,
-                    "language": c.language,
-                    "type": c.type,
-                    "question": c.question,
-                    "reference_answer": c.reference_answer,
-                    "gold_chunk_id": c.gold_chunk_id or "",
-                    "required_facts": json.dumps(c.required_facts, ensure_ascii=False),
-                    "status": c.status,
-                    "review_action": c.review_action or "",
-                    "review_notes": c.review_notes or "",
-                    "split": c.split,
+                    "id": escape_csv_formula(c.id),
+                    "language": escape_csv_formula(c.language),
+                    "type": escape_csv_formula(c.type),
+                    "question": escape_csv_formula(c.question),
+                    "reference_answer": escape_csv_formula(c.reference_answer),
+                    "gold_chunk_id": escape_csv_formula(c.gold_chunk_id or ""),
+                    "required_facts": escape_csv_formula(json.dumps(c.required_facts, ensure_ascii=False)),
+                    "status": escape_csv_formula(str(c.status)),
+                    "review_action": escape_csv_formula(str(c.review_action or "")),
+                    "review_notes": escape_csv_formula(c.review_notes or ""),
+                    "split": escape_csv_formula(str(c.split)),
                     "needs_native_review": "yes" if c.needs_native_review else "no",
                 }
             )

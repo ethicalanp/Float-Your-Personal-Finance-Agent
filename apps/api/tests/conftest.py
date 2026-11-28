@@ -166,8 +166,10 @@ def force_test_environment_and_fake_ai(request: pytest.FixtureRequest) -> Genera
     old_env = os.environ.get("PFA_APP_ENV")
     os.environ["PFA_APP_ENV"] = "test"
     from app.core.config import get_settings
+    from app.services.auth_lockout import lockout_tracker
 
     get_settings.cache_clear()
+    lockout_tracker.reset()
 
     if not is_real:
         fake_embedder = FakeEmbedder()
