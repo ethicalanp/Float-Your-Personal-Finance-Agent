@@ -16,6 +16,11 @@ from app.models.enums import AuthAuditEventType, AuthProvider, ConsentType
 from app.models.plan import Account, Transaction
 from app.models.protect import AuditTrail, ScamCheckLog
 from app.models.recurring import RecurringCommitment
+from app.models.subscriptions_networth import (
+    NetWorthItem,
+    NetWorthSnapshot,
+    SubscriptionLeakDecision,
+)
 from app.models.user import AuthAuditLog, Consent, User, UserIdentity, UserSession
 from app.services.auth_audit import log_auth_event
 
@@ -200,6 +205,10 @@ async def export_my_data(
         if conv_ids
         else []
     )
+    nw_items = (await db.execute(select(NetWorthItem).where(NetWorthItem.user_id == user.id))).scalars().all()
+    nw_snapshots = (
+        (await db.execute(select(NetWorthSnapshot).where(NetWorthSnapshot.user_id == user.id))).scalars().all()
+    )
 
     db.add(
         AuditTrail(
@@ -290,6 +299,29 @@ async def export_my_data(
             }
             for m in messages
         ],
+        "net_worth_items": [
+            {
+                "id": str(i.id),
+                "name": i.name,
+                "item_type": i.item_type,
+                "category": i.category,
+                "amount_paise": i.amount_paise,
+                "valued_at": i.valued_at.isoformat(),
+                "created_at": i.created_at.isoformat(),
+            }
+            for i in nw_items
+        ],
+        "net_worth_snapshots": [
+            {
+                "id": str(s.id),
+                "snapshot_date": s.snapshot_date.isoformat(),
+                "total_assets_paise": s.total_assets_paise,
+                "total_liabilities_paise": s.total_liabilities_paise,
+                "net_worth_paise": s.net_worth_paise,
+                "created_at": s.created_at.isoformat(),
+            }
+            for s in nw_snapshots
+        ],
     }
 
 
@@ -319,6 +351,11 @@ async def request_account_deletion(
     if conv_ids:
         await db.execute(delete(Message).where(Message.conversation_id.in_(conv_ids)))
         await db.execute(delete(Conversation).where(Conversation.id.in_(conv_ids)))
+
+    # 2b. Purge sensitive net worth & subscription leak decisions
+    await db.execute(delete(NetWorthSnapshot).where(NetWorthSnapshot.user_id == user.id))
+    await db.execute(delete(NetWorthItem).where(NetWorthItem.user_id == user.id))
+    await db.execute(delete(SubscriptionLeakDecision).where(SubscriptionLeakDecision.user_id == user.id))
 
     # 3. Anonymize audit identifiers
     await db.execute(

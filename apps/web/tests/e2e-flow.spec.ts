@@ -91,6 +91,65 @@ test.describe("Float MVP End-to-End User Flow (Mocked & Themed)", () => {
       })
     );
 
+    await page.route("**/api/backend/**/plan/health-score*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          formula_version: "v1.0.0",
+          month: "2026-11",
+          overall_score: 78,
+          band: "steady",
+          confidence: "medium",
+          available_components: 4,
+          total_components: 6,
+          has_essential_insurance: null,
+          components: [
+            {
+              key: "savings_rate",
+              label: "Savings Rate",
+              status: "available",
+              score: 100,
+              weight: 25,
+              value_display: "55.6%",
+              why: "Net cash flow this month is 55.6% of monthly income.",
+              educational_tip: "Aiming to retain 20% or more builds resilience.",
+            },
+            {
+              key: "insurance_flag",
+              label: "Essential Insurance",
+              status: "insufficient_data",
+              score: null,
+              weight: 10,
+              value_display: "Insufficient data",
+              why: "Self-reported insurance status has not been set yet.",
+              educational_tip: "Set your essential insurance status below.",
+            },
+          ],
+          best_next_action: {
+            priority: 1,
+            pillar: "Protect",
+            title: "Confirm essential protection status",
+            why: "Verifying health/term coverage helps guard against unexpected medical expenses.",
+            href: "/home#health-score",
+          },
+          float_path: [
+            {
+              priority: 1,
+              pillar: "Protect",
+              title: "Confirm essential protection status",
+              why: "Verifying health/term coverage helps guard against unexpected medical expenses.",
+              href: "/home#health-score",
+            },
+          ],
+          history: [],
+          delta_from_previous: null,
+          version_changed: false,
+          disclaimer: "Educational financial health indicator only.",
+        }),
+      })
+    );
+
     await page.route("**/api/backend/**/plan/upload-statement*", (route) =>
       route.fulfill({
         status: 200,
@@ -209,11 +268,14 @@ test.describe("Float MVP End-to-End User Flow (Mocked & Themed)", () => {
         },
       ]);
 
-      // 2. Navigate to Home & Verify Cash Flow
+      // 2. Navigate to Home & Verify Cash Flow + Health Score
       await page.goto("/home");
       await expect(page.locator("h1")).toContainText("Financial Overview");
       await expect(page.locator("text=Total Inflow")).toBeVisible({ timeout: 10000 });
       await expect(page.locator("text=Total Outflow")).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="health-score-card"]')).toBeVisible();
+      await expect(page.locator('[data-testid="health-score-value"]')).toContainText("78/100");
+      await expect(page.locator('[data-testid="float-path-section"]')).toBeVisible();
 
       // 3. Test Protect & Scam Check
       await page.goto("/protect");

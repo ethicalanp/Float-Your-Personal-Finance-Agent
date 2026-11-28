@@ -38,3 +38,16 @@
   - Bill reminders (`due_soon` within 7 days, `overdue` past due in IST) are computed deterministically.
 - **Security**:
   - Cross-user access returns `404`. Audit all mutations. Apply rate limits.
+
+## Float Health Score (`v1.0.0`)
+- **Deterministic, Explainable, Versioned**: `FORMULA_VERSION = "v1.0.0"` in `app/services/health_score_service.py`. Educational indicator only — never gives investment or product recommendations.
+- **Components & Weights (total = 100)**:
+  - `savings_rate` (**25**): `(income - outflow) / income * 100` (`>=20%` → 100, `10–20%` → 60–100, `0–10%` → 20–60, `<0%` → 0).
+  - `emergency_fund_months` (**20**): liquid savings balance / monthly outflow (`>=6m` → 100, `3–6m` → 70–100, `1–3m` → 35–70, `<1m` → 0–35).
+  - `debt_to_income` (**20**): monthly EMI commitments / monthly income (`<=15%` → 100, `15–35%` → 60–100, `35–50%` → 25–60, `>50%` → 0).
+  - `budget_adherence` (**15**): actual Needs+Wants / planned Needs+Wants (`<=95%` → 100, `95–105%` → 75, `105–120%` → 40, `>120%` → 10).
+  - `subscriptions_share` (**10**): monthly recurring subscriptions / monthly income (`<=5%` → 100, `5–10%` → 70, `10–20%` → 35, `>20%` → 10).
+  - `insurance_flag` (**10**): user-entered essential insurance flag (`True` → 100, `False` → 25, unset → `insufficient_data`).
+- **Missing Data Rule**: Missing or zero-income components return `status = "insufficient_data"` (`score = None`), **never `0`**. Overall score is the weighted average over `available` components only.
+- **Bands**: `80–100` (`strong`), `60–79` (`steady`), `40–59` (`building`), `0–39` (`needs_attention`), `None` (`insufficient_data`).
+- **Float Path & History**: Ordered next steps across `Protect`, `Plan`, and `Borrow-ready` with `best_next_action` first; snapshots persisted with `formula_version` so deltas are suppressed and flagged (`version_changed=True`) across formula version changes.

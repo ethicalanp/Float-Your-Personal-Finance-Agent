@@ -3,6 +3,7 @@ from app.models.admin import AdminUser
 from app.models.borrow import BorrowAssessment
 from app.models.budget import BudgetPlan
 from app.models.conversations import Conversation, Message
+from app.models.goals import EmergencyFundConfig, Goal
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import (
@@ -16,6 +17,11 @@ from app.models.recurring import (
     RecurringCommitment,
     RecurringNotification,
     RecurringOccurrence,
+)
+from app.models.subscriptions_networth import (
+    NetWorthItem,
+    NetWorthSnapshot,
+    SubscriptionLeakDecision,
 )
 from app.models.user import (
     AuthAuditLog,
@@ -37,7 +43,12 @@ __all__ = [
     "BudgetPlan",
     "Consent",
     "Conversation",
+    "EmergencyFundConfig",
+    "Goal",
     "KnowledgeChunk",
+    "NetWorthItem",
+    "NetWorthSnapshot",
+    "SubscriptionLeakDecision",
     "KnowledgeDocument",
     "Message",
     "RecoveryCase",

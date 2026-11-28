@@ -901,6 +901,447 @@ async def handle_get_upcoming_bills(ctx: ToolContext, args: UpcomingBillsInput) 
     )
 
 
+class HealthScoreInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="IST month YYYY-MM")
+
+
+class HealthScoreToolData(BaseModel):
+    formula_version: str
+    month: str
+    overall_score: int | None
+    band: str
+    available_components: int
+    total_components: int
+    best_next_action: str | None
+    components: list[dict[str, Any]]
+
+
+async def handle_get_health_score(ctx: ToolContext, args: HealthScoreInput) -> ToolResult:
+    from app.models.user import User
+    from app.services.health_score_service import compute_health_score
+
+    u_res = await _execute(ctx.session, select(User).where(User.id == ctx.user_id))
+    user = u_res.scalar_one_or_none()
+    if user is None:
+        return ToolResult(ok=False, tool="get_health_score", data={"error": "User not found"})
+
+    res = await compute_health_score(ctx.session, user, month=args.month, record_snapshot=False)
+    best_title = res.best_next_action.title if res.best_next_action else None
+    facts = [
+        Fact(id="health_formula_version", label="Formula Version", value=res.formula_version, unit="version"),
+        Fact(id="health_band", label="Health Band", value=res.band, unit="band", period=res.month),
+        Fact(
+            id="health_available_components",
+            label="Available Components",
+            value=str(res.available_components),
+            unit="count",
+        ),
+    ]
+    if res.overall_score is not None:
+        facts.append(
+            Fact(
+                id="health_score",
+                label="Float Health Score",
+                value=str(res.overall_score),
+                unit="score_0_100",
+                period=res.month,
+            )
+        )
+    if best_title:
+        facts.append(Fact(id="best_next_action", label="Best Next Action", value=best_title, unit="step"))
+
+    return ToolResult(
+        ok=True,
+        tool="get_health_score",
+        data=HealthScoreToolData(
+            formula_version=res.formula_version,
+            month=res.month,
+            overall_score=res.overall_score,
+            band=res.band,
+            available_components=res.available_components,
+            total_components=res.total_components,
+            best_next_action=best_title,
+            components=[c.model_dump() for c in res.components],
+        ).model_dump(),
+        facts=facts,
+    )
+
+
+class GoalsToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="IST month YYYY-MM")
+
+
+class GoalsToolData(BaseModel):
+    ist_month: str
+    goals_count: int
+    total_suggested_monthly_inr: Decimal
+    budget_savings_inr: Decimal | None
+    has_allocation_conflict: bool
+    shortfall_inr: Decimal
+    goals: list[dict[str, Any]]
+
+
+async def handle_get_goals(ctx: ToolContext, args: GoalsToolInput) -> ToolResult:
+    from app.services.goals_service import compute_goals_overview
+
+    ov = await compute_goals_overview(ctx.session, ctx.user_id, month=args.month)
+    tot_inr = paise_to_rupees(ov.total_suggested_monthly_paise)
+    sav_inr = paise_to_rupees(ov.budget_savings_paise) if ov.budget_savings_paise is not None else None
+    short_inr = paise_to_rupees(ov.shortfall_paise)
+    facts = [
+        Fact(id="goals_count", label="Active Goals", value=str(len(ov.goals)), unit="count", period=ov.ist_month),
+        Fact(
+            id="goals_suggested_monthly_inr",
+            label="Total Suggested Monthly Goal Savings",
+            value=str(tot_inr),
+            unit="INR",
+            period=ov.ist_month,
+        ),
+        Fact(
+            id="goals_allocation_conflict",
+            label="Allocation Conflict",
+            value=str(ov.has_allocation_conflict).lower(),
+            unit="boolean",
+            period=ov.ist_month,
+        ),
+    ]
+    if sav_inr is not None:
+        facts.append(
+            Fact(
+                id="budget_savings_inr",
+                label="Monthly Budget Savings Share",
+                value=str(sav_inr),
+                unit="INR",
+                period=ov.ist_month,
+            )
+        )
+    return ToolResult(
+        ok=True,
+        tool="get_goals",
+        data=GoalsToolData(
+            ist_month=ov.ist_month,
+            goals_count=len(ov.goals),
+            total_suggested_monthly_inr=tot_inr,
+            budget_savings_inr=sav_inr,
+            has_allocation_conflict=ov.has_allocation_conflict,
+            shortfall_inr=short_inr,
+            goals=[g.model_dump() for g in ov.goals],
+        ).model_dump(),
+        facts=facts,
+    )
+
+
+class EmergencyFundToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="IST month YYYY-MM")
+
+
+class EmergencyFundToolData(BaseModel):
+    ist_month: str
+    target_months: int
+    essential_monthly_inr: Decimal
+    target_amount_inr: Decimal
+    effective_saved_inr: Decimal
+    remaining_inr: Decimal
+    progress_pct: float
+
+
+async def handle_get_emergency_fund(ctx: ToolContext, args: EmergencyFundToolInput) -> ToolResult:
+    from app.services.goals_service import compute_emergency_fund_overview
+
+    ef = await compute_emergency_fund_overview(ctx.session, ctx.user_id, month=args.month)
+    ess_inr = paise_to_rupees(ef.essential_monthly_paise)
+    tgt_inr = paise_to_rupees(ef.target_amount_paise)
+    sav_inr = paise_to_rupees(ef.effective_saved_paise)
+    rem_inr = paise_to_rupees(ef.remaining_paise)
+    return ToolResult(
+        ok=True,
+        tool="get_emergency_fund",
+        data=EmergencyFundToolData(
+            ist_month=ef.ist_month,
+            target_months=ef.target_months,
+            essential_monthly_inr=ess_inr,
+            target_amount_inr=tgt_inr,
+            effective_saved_inr=sav_inr,
+            remaining_inr=rem_inr,
+            progress_pct=ef.progress_pct,
+        ).model_dump(),
+        facts=[
+            Fact(
+                id="emergency_target_months",
+                label="Emergency Fund Target Months",
+                value=str(ef.target_months),
+                unit="months",
+                period=ef.ist_month,
+            ),
+            Fact(
+                id="emergency_target_inr",
+                label="Emergency Fund Target",
+                value=str(tgt_inr),
+                unit="INR",
+                period=ef.ist_month,
+            ),
+            Fact(
+                id="emergency_saved_inr",
+                label="Emergency Fund Saved",
+                value=str(sav_inr),
+                unit="INR",
+                period=ef.ist_month,
+            ),
+            Fact(
+                id="emergency_progress_pct",
+                label="Emergency Fund Progress",
+                value=str(ef.progress_pct),
+                unit="percent",
+                period=ef.ist_month,
+            ),
+        ],
+    )
+
+
+class SubscriptionLeaksInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class SubscriptionLeaksToolData(BaseModel):
+    total_leaks: int
+    estimated_yearly_savings_inr: Decimal
+    potential_yearly_savings_inr: Decimal
+    leaks: list[dict[str, Any]]
+
+
+async def handle_get_subscription_leaks(ctx: ToolContext, args: SubscriptionLeaksInput) -> ToolResult:
+    from app.services.subscriptions_networth_service import compute_subscription_leaks
+
+    res = await compute_subscription_leaks(ctx.session, ctx.user_id)
+    est_inr = paise_to_rupees(res.estimated_yearly_savings_paise)
+    pot_inr = paise_to_rupees(res.potential_yearly_savings_paise)
+    return ToolResult(
+        ok=True,
+        tool="get_subscription_leaks",
+        data=SubscriptionLeaksToolData(
+            total_leaks=res.total_leaks,
+            estimated_yearly_savings_inr=est_inr,
+            potential_yearly_savings_inr=pot_inr,
+            leaks=[lk.model_dump() for lk in res.leaks],
+        ).model_dump(),
+        facts=[
+            Fact(id="subscription_leaks_count", label="Detected Leaks", value=str(res.total_leaks), unit="count"),
+            Fact(
+                id="estimated_yearly_savings_inr",
+                label="Estimated Yearly Savings (Marked Cancel)",
+                value=str(est_inr),
+                unit="INR",
+            ),
+            Fact(
+                id="potential_yearly_savings_inr",
+                label="Potential Yearly Savings",
+                value=str(pot_inr),
+                unit="INR",
+            ),
+        ],
+    )
+
+
+class NetWorthInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class NetWorthToolData(BaseModel):
+    total_assets_inr: Decimal
+    total_liabilities_inr: Decimal
+    net_worth_inr: Decimal
+    is_negative: bool
+    stale_count: int
+    masked_items: list[dict[str, Any]]
+
+
+async def handle_get_net_worth(ctx: ToolContext, args: NetWorthInput) -> ToolResult:
+    from app.ai.security.masking import mask_pii
+    from app.services.subscriptions_networth_service import compute_net_worth_overview
+
+    ov = await compute_net_worth_overview(ctx.session, ctx.user_id)
+    assets_inr = paise_to_rupees(ov.total_assets_paise)
+    liab_inr = paise_to_rupees(ov.total_liabilities_paise)
+    nw_inr = paise_to_rupees(ov.net_worth_paise)
+    masked_items = [
+        {
+            "name_masked": mask_pii(it.name),
+            "item_type": it.item_type,
+            "category": it.category,
+            "is_stale": it.is_stale,
+        }
+        for it in ov.items
+    ]
+    return ToolResult(
+        ok=True,
+        tool="get_net_worth",
+        data=NetWorthToolData(
+            total_assets_inr=assets_inr,
+            total_liabilities_inr=liab_inr,
+            net_worth_inr=nw_inr,
+            is_negative=ov.is_negative,
+            stale_count=ov.stale_count,
+            masked_items=masked_items,
+        ).model_dump(),
+        facts=[
+            Fact(id="net_worth_assets_inr", label="Total Assets", value=str(assets_inr), unit="INR"),
+            Fact(id="net_worth_liabilities_inr", label="Total Liabilities", value=str(liab_inr), unit="INR"),
+            Fact(id="net_worth_inr", label="Net Worth", value=str(nw_inr), unit="INR"),
+            Fact(id="net_worth_stale_count", label="Stale Items", value=str(ov.stale_count), unit="count"),
+        ],
+    )
+
+
+class SipProjectionToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    monthly_sip_inr: Decimal = Field(Decimal("5000"), ge=Decimal("0"), le=Decimal("10000000"))
+    lumpsum_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000000"))
+    years: int = Field(10, ge=1, le=50)
+    expected_return_pct: Decimal = Field(Decimal("10"), ge=Decimal("0"), le=Decimal("30"))
+    adjust_for_inflation: bool = True
+    inflation_pct: Decimal = Field(Decimal("6"), ge=Decimal("0"), le=Decimal("20"))
+
+
+class SipProjectionToolData(BaseModel):
+    total_invested_inr: Decimal
+    projected_nominal_inr: Decimal
+    projected_real_inr: Decimal
+    disclaimer: str
+
+
+async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionToolInput) -> ToolResult:
+    from app.services.calculators_service import calculate_sip_projection
+
+    res = calculate_sip_projection(
+        monthly_sip_paise=int((args.monthly_sip_inr * 100).to_integral_value()),
+        lumpsum_paise=int((args.lumpsum_inr * 100).to_integral_value()),
+        years=args.years,
+        expected_return_pct=args.expected_return_pct,
+        adjust_for_inflation=args.adjust_for_inflation,
+        inflation_pct=args.inflation_pct,
+    )
+    inv_inr = paise_to_rupees(res.total_invested_paise)
+    nom_inr = paise_to_rupees(res.projected_nominal_paise)
+    real_inr = paise_to_rupees(res.projected_real_paise)
+    return ToolResult(
+        ok=True,
+        tool="calculate_sip_projection",
+        data=SipProjectionToolData(
+            total_invested_inr=inv_inr,
+            projected_nominal_inr=nom_inr,
+            projected_real_inr=real_inr,
+            disclaimer=res.disclaimer,
+        ).model_dump(),
+        facts=[
+            Fact(id="sip_invested_inr", label="Total Invested", value=str(inv_inr), unit="INR"),
+            Fact(id="sip_nominal_inr", label="Illustrative Nominal Corpus", value=str(nom_inr), unit="INR"),
+            Fact(id="sip_real_inr", label="Illustrative Inflation-Adjusted Corpus", value=str(real_inr), unit="INR"),
+        ],
+    )
+
+
+class InsuranceGapToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    annual_income_inr: Decimal = Field(Decimal("600000"), ge=Decimal("0"), le=Decimal("100000000"))
+    dependants: int = Field(1, ge=0, le=20)
+    existing_life_cover_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("1000000000"))
+    existing_health_cover_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000000"))
+    liabilities_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000000"))
+
+
+class InsuranceGapToolData(BaseModel):
+    recommended_life_cover_inr: Decimal
+    life_cover_gap_inr: Decimal
+    recommended_health_cover_inr: Decimal
+    health_cover_gap_inr: Decimal
+    disclaimer: str
+
+
+async def handle_calculate_insurance_gap(ctx: ToolContext, args: InsuranceGapToolInput) -> ToolResult:
+    from app.services.calculators_service import calculate_insurance_gap
+
+    res = calculate_insurance_gap(
+        annual_income_paise=int((args.annual_income_inr * 100).to_integral_value()),
+        dependants=args.dependants,
+        existing_life_cover_paise=int((args.existing_life_cover_inr * 100).to_integral_value()),
+        existing_health_cover_paise=int((args.existing_health_cover_inr * 100).to_integral_value()),
+        liabilities_paise=int((args.liabilities_inr * 100).to_integral_value()),
+    )
+    rec_l = paise_to_rupees(res.recommended_life_cover_paise)
+    gap_l = paise_to_rupees(res.life_cover_gap_paise)
+    rec_h = paise_to_rupees(res.recommended_health_cover_paise)
+    gap_h = paise_to_rupees(res.health_cover_gap_paise)
+    return ToolResult(
+        ok=True,
+        tool="calculate_insurance_gap",
+        data=InsuranceGapToolData(
+            recommended_life_cover_inr=rec_l,
+            life_cover_gap_inr=gap_l,
+            recommended_health_cover_inr=rec_h,
+            health_cover_gap_inr=gap_h,
+            disclaimer=res.disclaimer,
+        ).model_dump(),
+        facts=[
+            Fact(id="ins_rec_life_inr", label="Heuristic Life Cover", value=str(rec_l), unit="INR"),
+            Fact(id="ins_gap_life_inr", label="Life Cover Gap", value=str(gap_l), unit="INR"),
+            Fact(id="ins_rec_health_inr", label="Heuristic Health Cover", value=str(rec_h), unit="INR"),
+            Fact(id="ins_gap_health_inr", label="Health Cover Gap", value=str(gap_h), unit="INR"),
+        ],
+    )
+
+
+class TaxCompareToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    gross_income_inr: Decimal = Field(Decimal("1200000"), ge=Decimal("0"), le=Decimal("100000000"))
+    is_salaried: bool = True
+    deduction_80c_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("150000"))
+    deduction_80d_inr: Decimal = Field(Decimal("0"), ge=Decimal("0"), le=Decimal("100000"))
+
+
+class TaxCompareToolData(BaseModel):
+    financial_year: str
+    as_of: str
+    source_url: str
+    old_regime_tax_inr: Decimal
+    new_regime_tax_inr: Decimal
+    lower_tax_regime: str
+    educational_notice: str
+
+
+async def handle_compare_tax_regimes(ctx: ToolContext, args: TaxCompareToolInput) -> ToolResult:
+    from app.services.calculators_service import compare_tax_regimes
+
+    res = compare_tax_regimes(
+        gross_income_paise=int((args.gross_income_inr * 100).to_integral_value()),
+        is_salaried=args.is_salaried,
+        deduction_80c_paise=int((args.deduction_80c_inr * 100).to_integral_value()),
+        deduction_80d_paise=int((args.deduction_80d_inr * 100).to_integral_value()),
+    )
+    old_t = paise_to_rupees(res.old_regime.total_tax_paise)
+    new_t = paise_to_rupees(res.new_regime.total_tax_paise)
+    return ToolResult(
+        ok=True,
+        tool="compare_tax_regimes",
+        data=TaxCompareToolData(
+            financial_year=res.financial_year,
+            as_of=res.as_of,
+            source_url=res.source_url,
+            old_regime_tax_inr=old_t,
+            new_regime_tax_inr=new_t,
+            lower_tax_regime=res.lower_tax_regime,
+            educational_notice=res.educational_notice,
+        ).model_dump(),
+        facts=[
+            Fact(id="tax_old_inr", label="Old Regime Tax", value=str(old_t), unit="INR"),
+            Fact(id="tax_new_inr", label="New Regime Tax", value=str(new_t), unit="INR"),
+            Fact(id="tax_lower_regime", label="Lower Tax Regime", value=res.lower_tax_regime, unit="label"),
+        ],
+    )
+
+
 # ============================================================================
 # Tool Specifications and Registration
 # ============================================================================
@@ -998,7 +1439,87 @@ def register_financial_tools() -> None:
             output_model=UpcomingBillsData,
             handler=handle_get_upcoming_bills,
         ),
-    ]
+        Tool(
+            name="get_health_score",
+            description=(
+                "Compute the deterministic, versioned Float Health Score (0-100), 6 component statuses "
+                "(savings rate, emergency fund months, DTI, budget adherence, subscriptions share, insurance flag), "
+                "and ordered Float Path next steps."
+            ),
+            input_model=HealthScoreInput,
+            output_model=HealthScoreToolData,
+            handler=handle_get_health_score,
+        ),
+        Tool(
+            name="get_goals",
+            description=(
+                "List user savings goals with suggested monthly savings (paise/INR), feasibility against "
+                "budget savings share, and any multi-goal allocation conflicts."
+            ),
+            input_model=GoalsToolInput,
+            output_model=GoalsToolData,
+            handler=handle_get_goals,
+        ),
+        Tool(
+            name="get_emergency_fund",
+            description=(
+                "Retrieve emergency fund target (target months x essential monthly expenses from needs + recurring), "
+                "saved liquid balance, and progress percentage."
+            ),
+            input_model=EmergencyFundToolInput,
+            output_model=EmergencyFundToolData,
+            handler=handle_get_emergency_fund,
+        ),
+        Tool(
+            name="get_subscription_leaks",
+            description=(
+                "Detect potential subscription leaks (duplicates, price increases, small recurring, "
+                "annual renewals, trial-to-paid) and estimated yearly savings."
+            ),
+            input_model=SubscriptionLeaksInput,
+            output_model=SubscriptionLeaksToolData,
+            handler=handle_get_subscription_leaks,
+        ),
+        Tool(
+            name="get_net_worth",
+            description=(
+                "Compute net worth (total assets minus liabilities), stale-value prompt count, and masked summary."
+            ),
+            input_model=NetWorthInput,
+            output_model=NetWorthToolData,
+            handler=handle_get_net_worth,
+        ),
+        Tool(
+            name="calculate_sip_projection",
+            description=(
+                "Educational SIP and lumpsum projection calculator with illustrative return range "
+                "(8%, 10%, 12%, not a guarantee) and optional inflation adjustment."
+            ),
+            input_model=SipProjectionToolInput,
+            output_model=SipProjectionToolData,
+            handler=handle_calculate_sip_projection,
+        ),
+        Tool(
+            name="calculate_insurance_gap",
+            description=(
+                "Educational insurance gap check heuristic for life and health cover based on "
+                "annual income, dependants, and existing cover. No product recommendations."
+            ),
+            input_model=InsuranceGapToolInput,
+            output_model=InsuranceGapToolData,
+            handler=handle_calculate_insurance_gap,
+        ),
+        Tool(
+            name="compare_tax_regimes",
+            description=(
+                "Educational comparison of Old vs New Indian income tax regimes using versioned "
+                "parameters with source URL and as_of date. Not tax advice or filing."
+            ),
+            input_model=TaxCompareToolInput,
+            output_model=TaxCompareToolData,
+            handler=handle_compare_tax_regimes,
+        ),
+]
 
     for tool in tools:
         try:
