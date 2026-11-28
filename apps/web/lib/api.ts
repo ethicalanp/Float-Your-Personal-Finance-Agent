@@ -40,12 +40,23 @@ async function resilientFetch(
   }
 }
 
+let browserClient: FloatApiClient | null = null;
+
 /**
  * Returns a FloatApiClient instance configured for browser-side calls via the BFF proxy,
  * or direct backend calls when running server-side with an explicit token.
  */
 export function getApiClient(token?: string): FloatApiClient {
   const isBrowser = typeof window !== "undefined";
+  if (isBrowser && !token) {
+    if (!browserClient) {
+      browserClient = new FloatApiClient({
+        baseUrl: "/api/backend",
+        fetch: resilientFetch,
+      });
+    }
+    return browserClient;
+  }
   const baseUrl = isBrowser ? "/api/backend" : (process.env.PFA_API_URL || "http://127.0.0.1:8000");
 
   return new FloatApiClient({
