@@ -274,7 +274,10 @@ def calculate_sip_projection(
         yearly_schedule=yearly_schedule,
         illustrative_scenarios=scenarios,
         assumptions=assumptions,
-        disclaimer="Illustrative mathematical projection only — not a guarantee of returns, not advice; taxes and fees ignored.",
+        disclaimer=(
+            "Illustrative mathematical projection only — not a guarantee of returns, "
+            "not advice; taxes and fees ignored."
+        ),
     )
 
 

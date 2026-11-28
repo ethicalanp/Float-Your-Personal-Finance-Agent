@@ -1262,7 +1262,12 @@ async def handle_calculate_sip_projection(ctx: ToolContext, args: SipProjectionT
     ]
     if req_sip_inr is not None:
         facts.append(
-            Fact(id="sip_required_starting_inr", label="Required Starting Monthly SIP", value=str(req_sip_inr), unit="INR")
+            Fact(
+                id="sip_required_starting_inr",
+                label="Required Starting Monthly SIP",
+                value=str(req_sip_inr),
+                unit="INR",
+            )
         )
     return ToolResult(
         ok=True,
