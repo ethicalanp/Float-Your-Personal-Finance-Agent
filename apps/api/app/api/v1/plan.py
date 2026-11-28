@@ -42,6 +42,13 @@ from app.services.calculators_service import (
     compare_tax_regimes,
 )
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
+from app.services.goals_service import (
+    EmergencyFundResponse,
+    GoalsOverviewResponse,
+    compute_emergency_fund_overview,
+    compute_goals_overview,
+)
+from app.services.health_score_service import FORMULA_VERSION, HealthScoreResponse, compute_health_score
 from app.services.recurring_service import match_transactions_bulk
 from app.services.statement_parser import (
     StatementParseError,

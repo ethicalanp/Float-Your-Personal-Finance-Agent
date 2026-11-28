@@ -146,7 +146,7 @@ class PolicyGuard:
             "investment_advice",
         ),
         (
-            r"(?:മ്യൂച്വൽ\s*ഫണ്ട്\w*|എസ്\s*ഐ\s*പി|ഓഹരി\w*|നിക്ഷേപ\w*|പെന്നി\s*സ്റ്റോക്ക്|ട്രേഡിംഗ്|ക്രിപ്റ്റോ\w*|ഫണ്ടിൽ)",
+            r"(?:മ്യൂച്വൽ\s*ഫണ്ട്\w*|എസ്\s*ഐ\s*പി|ഓഹരി\w*|നിക്ഷേപിക്ക\w*|പെന്നി\s*സ്റ്റോക്ക്|ട്രേഡിംഗ്|ക്രിപ്റ്റോ\w*|ഫണ്ടിൽ)",
             "Float provides regulatory fraud and borrowing guidance but cannot recommend investments.",
             "investment_advice",
         ),
