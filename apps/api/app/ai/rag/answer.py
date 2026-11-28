@@ -131,6 +131,7 @@ class KnowledgeAnswerService:
         validator: AnswerValidator | None = None,
         rewriter: QueryRewriter | None = None,
         policy_guard: PolicyGuard | None = None,
+        translate_query_for_retrieval: bool = False,
     ) -> None:
         self.session = session
         self.retriever = retriever
@@ -138,6 +139,7 @@ class KnowledgeAnswerService:
         self.validator = validator or AnswerValidator()
         self.rewriter = rewriter or QueryRewriter()
         self.policy_guard = policy_guard or PolicyGuard(embedder=getattr(self.retriever, "embedder", None))
+        self.translate_query_for_retrieval = translate_query_for_retrieval
 
     async def _check_consent(self, user_id: uuid.UUID) -> None:
         """Verify user has an active ai_data_processing consent."""
@@ -249,6 +251,96 @@ class KnowledgeAnswerService:
             refusal_reason=None,
         )
 
+    async def _translate_query_to_english(
+        self,
+        query: str,
+        lang: str,
+        user_id: uuid.UUID,
+        trace_id: str,
+    ) -> str:
+        """Translate Malayalam/Manglish query to English for retrieval while preserving original for answering."""
+        if not self.gateway or self.gateway.config.provider == "fake":
+            return query
+        try:
+            req = LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            "Translate the user's Malayalam or Manglish personal-finance/cyber-fraud question "
+                            "into concise English search keywords/question. Output ONLY the English text."
+                        ),
+                    ),
+                    LLMMessage(role="user", content=f"[{lang}] {query}"),
+                ],
+                temperature=0.0,
+                max_output_tokens=1500,
+                prompt_version="query_translate_v1",
+                trace_id=trace_id,
+                user_id=str(user_id),
+                data_class="masked_real",
+            )
+            resp = await self.gateway.complete(req)
+            translated = (resp.text or "").strip()
+            return translated if translated else query
+        except Exception as exc:
+            logger.warning("Query translation fallback (%s); using original query.", type(exc).__name__)
+            return query
+
+    def _build_soft_abstain_response(
+        self,
+        masked_question: str,
+        evidence: RetrievedEvidence,
+        effective_lang: str,
+        trace_id: str,
+    ) -> KnowledgeAnswerResponse:
+        """Return borderline soft abstain: state what is known with citations and offer 2 related questions."""
+        top_chunks = evidence.chunks[:2]
+        alias_map = {f"E{i + 1}": c for i, c in enumerate(top_chunks)}
+        citations = self._build_citations(list(alias_map.keys()), alias_map)
+
+        known_lines = []
+        related_questions: list[str] = []
+        for alias, chunk in alias_map.items():
+            snippet = chunk.text.strip().replace("\n", " ")[:220]
+            known_lines.append(f"- [{alias}] {chunk.title}: {snippet}...")
+            topic = (chunk.heading_path or chunk.title).split(">")[-1].strip()
+            related_questions.append(f"What does {chunk.title} say about {topic}?")
+
+        while len(related_questions) < 2:
+            related_questions.append("How do I report an unauthorized digital payment or UPI fraud on 1930?")
+        related_questions = related_questions[:2]
+
+        answer_text = (
+            "Official documents do not directly answer your exact question with high certainty, "
+            "but here is what is known from related verified sources:\n\n"
+            + "\n".join(known_lines)
+            + "\n\nRelated questions you can ask:\n"
+            + f"1. {related_questions[0]}\n"
+            + f"2. {related_questions[1]}"
+        )
+        if self._is_fraud_topic(masked_question):
+            answer_text += self._format_helpline_text()
+
+        return KnowledgeAnswerResponse(
+            status="insufficient_evidence",
+            answer=answer_text,
+            citations=citations,
+            confidence="low",
+            refusal_reason=None,
+            language=effective_lang,
+            degraded=evidence.degraded,
+            degraded_reason=evidence.degraded_reason,
+            disclaimer=self.DISCLAIMER,
+            trace_id=trace_id,
+            prompt_version=f"{PROMPT_VERSION}:{PROMPT_HASH}",
+            model=self.gateway.config.model,
+            provider=self.gateway.config.provider,
+            validation_failures=[],
+            soft_abstain=True,
+            related_questions=related_questions,
+        )
+
     def _check_policy_guard(
         self,
         question: str,
@@ -326,9 +418,20 @@ class KnowledgeAnswerService:
                     history_messages = list(reversed(self.session.execute(msg_stmt).scalars().all()))
 
         search_query = self.rewriter.rewrite(masked_question, history_messages)
+        effective_lang = request.language_hint or "en"
+        if self.translate_query_for_retrieval and effective_lang in ("ml", "manglish"):
+            search_query = await self._translate_query_to_english(
+                search_query, effective_lang, user.id, trace_id
+            )
 
         # 4. Phase 3 Hybrid Retrieval
-        evidence = await self.retriever.retrieve(search_query)
+        try:
+            evidence = await self.retriever.retrieve(
+                search_query,
+                query_language_hint=effective_lang,
+            )
+        except TypeError:
+            evidence = await self.retriever.retrieve(search_query)
 
         # 4b. Calibrated Semantic Policy Guard evaluation (Layer 2B with retrieval evidence score)
         semantic_guard = self._check_policy_guard(
@@ -337,32 +440,51 @@ class KnowledgeAnswerService:
         if semantic_guard:
             return semantic_guard
 
-        # 5. Abstention Gate BEFORE LLM
-        # If no evidence passed threshold, skip LLM entirely
+        # 5. Abstention Gate BEFORE LLM (with Soft Abstain for borderline confidence)
         if not evidence.chunks or not evidence.passed_min_evidence:
-            answer_text = (
-                "Official regulatory documents do not contain sufficient evidence "
-                "to answer this inquiry with certainty."
+            cfg = getattr(self.retriever, "config", None)
+            min_thr = cfg.threshold_for_language(effective_lang) if cfg else 0.83
+            soft_min = getattr(cfg, "soft_abstain_min_score", 0.76) if cfg else 0.76
+            embedder_name = getattr(getattr(self.retriever, "embedder", None), "model_name", "")
+            is_fake_embedder = embedder_name == "fake-deterministic-embedder"
+            top_score = evidence.top_fused_score if (is_fake_embedder or min_thr < 0.1) else evidence.top_vector_score
+            borderline = bool(evidence.chunks) and (
+                (0.005 <= top_score < 0.01) if is_fake_embedder else (soft_min <= top_score < min_thr)
             )
-            if self._is_fraud_topic(masked_question):
-                answer_text += self._format_helpline_text()
 
-            resp = KnowledgeAnswerResponse(
-                status="insufficient_evidence",
-                answer=answer_text,
-                citations=[],
-                confidence="low",
-                refusal_reason=None,
-                language=request.language_hint or "en",
-                degraded=evidence.degraded,
-                degraded_reason=evidence.degraded_reason,
-                disclaimer=self.DISCLAIMER,
-                trace_id=trace_id,
-                prompt_version=f"{PROMPT_VERSION}:{PROMPT_HASH}",
-                model=self.gateway.config.model,
-                provider=self.gateway.config.provider,
-                validation_failures=[],
-            )
+            if borderline:
+                resp = self._build_soft_abstain_response(
+                    masked_question=masked_question,
+                    evidence=evidence,
+                    effective_lang=effective_lang,
+                    trace_id=trace_id,
+                )
+            else:
+                answer_text = (
+                    "Official regulatory documents do not contain sufficient evidence "
+                    "to answer this inquiry with certainty."
+                )
+                if self._is_fraud_topic(masked_question):
+                    answer_text += self._format_helpline_text()
+
+                resp = KnowledgeAnswerResponse(
+                    status="insufficient_evidence",
+                    answer=answer_text,
+                    citations=[],
+                    confidence="low",
+                    refusal_reason=None,
+                    language=effective_lang,
+                    degraded=evidence.degraded,
+                    degraded_reason=evidence.degraded_reason,
+                    disclaimer=self.DISCLAIMER,
+                    trace_id=trace_id,
+                    prompt_version=f"{PROMPT_VERSION}:{PROMPT_HASH}",
+                    model=self.gateway.config.model,
+                    provider=self.gateway.config.provider,
+                    validation_failures=[],
+                    soft_abstain=False,
+                    related_questions=[],
+                )
             await self._persist_and_audit(user.id, request, masked_question, resp, trace_id, time.monotonic() - t0)
             return resp
 

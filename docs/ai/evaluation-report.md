@@ -102,3 +102,39 @@ When the retriever confidence falls below the strict answerable threshold ($scor
    - *"Float does not have sufficient verified regulatory evidence to directly answer this specific inquiry."*
    - List up to 3 retrieved official documents labelled: *"The following official documents may provide related regulatory context, but do not directly answer your question:"* (displaying document title, publisher, and official portal URL).
 2. **Mandatory Fraud Helpline Cards**: If the query touches cyber fraud, extortion, frozen accounts, or UPI scams, immediately append the official verified emergency channels (1930 National Cyber Crime Helpline, cybercrime.gov.in, local 112) regardless of whether the question was answered or abstained.
+
+---
+
+## 7. v2 Multilingual Retrieval & Soft-Abstain Evaluation (Fresh DVC-Tracked Datasets)
+
+### 7.1 Dataset Construction & Hygiene
+- **Zero Reuse of Spent Frozen Set**: Constructed brand-new `rag_v2_dev.jsonl` ($N=60$) and `rag_v2_test_frozen.jsonl` ($N=60$) via `python -m app.ai.evals.ml_eval build-dataset` (`SPLIT_SEED=20261127`), DVC-tracked (`rag_v2_dev.jsonl.dvc`, `rag_v2_test_frozen.jsonl.dvc`) with SHA-256 manifest (`rag_v2_manifest.json`) and `zero_overlap_with_spent_frozen = true`.
+- **Composition per Split ($N=60$ each)**: 20 `en`, 20 `ml`, 20 `manglish` (40 `ml+manglish` per split), covering `answerable` (27), `unanswerable` (12), `refusal` (9), `general_education` (6), and `out_of_scope` (6).
+- **Heading-Copy Rate**: **0.0% (0/66)** across all LLM-paraphrased `answerable` + `general_education` queries (`openai/gpt-oss-120b`).
+- **Human Review Export**: Exported `evals/review/rag_v2_review.csv` with every label marked `human_review_needed` (`needs_native_review=True` for all 80 `ml` + `manglish` rows).
+
+### 7.2 Malayalam Experiments on DEV Only ($N=60$; $n<30$ marked `*` indicative, Wilson 95% CIs)
+
+| Experiment (DEV, $N=60$) | Recall@5 ($n=33$) | Abstain ($n=60$) | Soft Abstain ($n=60$) | False Abstain ($n=33$) | False Answer ($n=18^*$) | Unsafe ($n=9^*$) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline** (`e5`, thr `0.83`) | 90.9% (30/33) [76.4, 96.9] | 53.3% (32/60) | 46.7% (28/60) | 45.5% (15/33) (`ml`: 11/11\*) | 5.6% (1/18\*) [1.0, 25.8] | 0.0% (0/9\*) |
+| **(a) Translate to EN** | 93.9% (31/33) [80.4, 98.3] | 35.0% (21/60) | 30.0% (18/60) | 12.1% (4/33) (`ml`: 2/11\*) | 11.1% (2/18\*) [3.1, 32.8] | 0.0% (0/9\*) |
+| **(b) Curated ML chunks** | 90.9% (30/33) [76.4, 96.9] | 51.7% (31/60) | 45.0% (27/60) | 42.4% (14/33) (`ml`: 10/11\*) | 5.6% (1/18\*) [1.0, 25.8] | 0.0% (0/9\*) |
+| **(c) Per-lang thresholds** (`en=0.83, ml=0.79, mg=0.82`) | 90.9% (30/33) [76.4, 96.9] | 30.0% (18/60) | 23.3% (14/60) | **6.1% (2/33)** (`ml`: **0/11\***) | 11.1% (2/18\*) [3.1, 32.8] | **0.0% (0/9\*)** |
+| **(a)+(b)+(c) Combined** | 93.9% (31/33) [80.4, 98.3] | 25.0% (15/60) | 20.0% (12/60) | 3.0% (1/33) | 22.2% (4/18\*) (`ml`: 3/6\*) | 11.1% (1/9\*) |
+| **(d) `BAAI/bge-m3` read-only** (thr `0.55`) | **100.0% (33/33)** [89.6, 100.0] | 21.7% (13/60) | 6.7% (4/60) | 57.6% (19/33) (`mg`: 11/11\*) | 0.0% (0/18\*) | 0.0% (0/9\*) |
+
+- **DEV Winner**: **`exp_c_per_lang_thresholds`** (`en=0.83`, `ml=0.79`, `manglish=0.82`). It cuts overall false-abstain from 45.5% to **6.1% (2/33)** and Malayalam false-abstain from 100.0% to **0.0% (0/11\*)** with **0.0% (0/9\*)** unsafe answers, zero extra LLM translation latency, and zero schema migration.
+
+### 7.3 One-Shot Held-Out Frozen Test ($N=60$, SHA-256 `a9a22b33...e00a90`)
+
+| Stratum | Recall@5 | Abstain | Soft Abstain | False Abstain | False Answer | Unsafe Answer |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Overall ($N=60$)** | **90.9% (30/33)** [76.4, 96.9] | 35.0% (21/60) [24.2, 47.6] | 28.3% (17/60) [18.5, 40.8] | **12.1% (4/33)** [4.8, 27.3] | 11.1% (2/18\*) [3.1, 32.8] | **0.0% (0/9\*)** [0.0, 29.9] |
+| **English ($n=20^*$)** | 90.9% (10/11\*) [62.3, 98.4] | 25.0% (5/20\*) [11.2, 46.9] | 15.0% (3/20\*) | 9.1% (1/11\*) [1.6, 37.7] | 16.7% (1/6\*) [3.0, 56.4] | 0.0% (0/3\*) |
+| **Malayalam ($n=20^*$)** | 90.9% (10/11\*) [62.3, 98.4] | 55.0% (11/20\*) [34.2, 74.2] | 45.0% (9/20\*) | **18.2% (2/11\*)** [5.1, 47.7] | **0.0% (0/6\*)** [0.0, 39.0] | 0.0% (0/3\*) |
+| **Manglish ($n=20^*$)** | 90.9% (10/11\*) [62.3, 98.4] | 25.0% (5/20\*) [11.2, 46.9] | 25.0% (5/20\*) | **9.1% (1/11\*)** [1.6, 37.7] | 16.7% (1/6\*) [3.0, 56.4] | 0.0% (0/3\*) |
+
+### 7.4 Native Malayalam Review Needed
+- All 80 `ml` and `manglish` labels in `evals/review/rag_v2_review.csv` (`status=human_review_needed`, `needs_native_review=True`).
+- Curated Malayalam glossary chunks (`CURATED_ML_GLOSSARY` in `app/ai/evals/ml_eval.py`) before any production ingestion.

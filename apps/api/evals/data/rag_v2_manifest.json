@@ -1,0 +1,13 @@
+{
+  "seed": 20261127,
+  "total": 120,
+  "n_dev": 60,
+  "n_test": 60,
+  "dev_file": "rag_v2_dev.jsonl",
+  "dev_sha256": "2a8a028b2b83f6527b392ac45b8451ef43b248560cdb8d8c9615677ee92db335",
+  "test_file": "rag_v2_test_frozen.jsonl",
+  "test_sha256": "a9a22b331d35013383fbebd02746ced55ef4a064d6c861bc28d5451185e00a90",
+  "heading_copy_count": 0,
+  "heading_copy_rate": 0.0,
+  "zero_overlap_with_spent_frozen": true
+}
