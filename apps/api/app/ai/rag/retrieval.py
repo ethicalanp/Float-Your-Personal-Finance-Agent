@@ -50,6 +50,8 @@ class RetrievalConfig:
     prepend_heading_path: bool = True
     max_per_document: int = 2
     min_evidence_score: float = 0.83
+    soft_abstain_min_score: float = 0.76
+    language_thresholds: tuple[tuple[str, float], ...] | None = (("en", 0.83), ("ml", 0.79), ("manglish", 0.82))
     calibrated_for_embedding: str = "intfloat/multilingual-e5-base:query: :passage: :True"
     vector_timeout_seconds: float = 3.0
     keyword_timeout_seconds: float = 2.0
@@ -68,6 +70,13 @@ class RetrievalConfig:
     def config_hash(self) -> str:
         data = json.dumps(asdict(self), sort_keys=True)
         return hashlib.sha256(data.encode("utf-8")).hexdigest()[:12]
+
+    def threshold_for_language(self, lang: str | None) -> float:
+        if lang and self.language_thresholds:
+            for k, v in self.language_thresholds:
+                if k == lang:
+                    return float(v)
+        return self.min_evidence_score
 
 
 @dataclass
@@ -279,6 +288,7 @@ class HybridRetriever:
         query: str,
         language_filter: str | None = None,
         doc_type_filter: str | None = None,
+        query_language_hint: str | None = None,
     ) -> RetrievedEvidence:
         t_start = time.monotonic()
         timings: dict[str, float] = {}
@@ -390,12 +400,13 @@ class HybridRetriever:
         second_score = fused_chunks[1].fused_score if len(fused_chunks) > 1 else 0.0
         score_gap = round(top_fused_score - second_score, 6)
 
+        min_threshold = self.config.threshold_for_language(query_language_hint)
         if isinstance(self.embedder, FakeEmbedder):
             passed_min = top_fused_score >= 0.01
-        elif self.config.min_evidence_score >= 0.1:
-            passed_min = top_vector_score >= self.config.min_evidence_score
+        elif min_threshold >= 0.1:
+            passed_min = top_vector_score >= min_threshold
         else:
-            passed_min = top_fused_score >= self.config.min_evidence_score
+            passed_min = top_fused_score >= min_threshold
 
         return RetrievedEvidence(
             chunks=fused_chunks,
