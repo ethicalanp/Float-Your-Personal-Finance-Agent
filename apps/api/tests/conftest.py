@@ -132,6 +132,30 @@ def client(app: FastAPI) -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def hermetic_default_db(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
+    """Never read a stale local dev.db file when PFA_DATABASE_URL is unset."""
+    db_url = os.environ.get("PFA_DATABASE_URL", "").strip()
+    if db_url and "dev.db" not in db_url:
+        yield
+        return
+
+    db_file = tmp_path_factory.mktemp("hermetic_db") / "test_hermetic.db"
+    os.environ["PFA_DATABASE_URL"] = f"sqlite+aiosqlite:///{db_file.as_posix()}"
+    from app.core.config import get_settings
+    from app.db.session import Base, get_async_engine, get_async_session_factory, get_sync_engine
+
+    get_settings.cache_clear()
+    get_async_engine.cache_clear()
+    get_async_session_factory.cache_clear()
+    get_sync_engine.cache_clear()
+
+    sync_eng = get_sync_engine()
+    Base.metadata.create_all(sync_eng, tables=APP_TABLES)
+    yield
+    sync_eng.dispose()
+
+
 @pytest.fixture(autouse=True)
 def force_test_environment_and_fake_ai(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     """Force fake provider, fake embedder, and test environment for all tests unless explicitly marked."""
