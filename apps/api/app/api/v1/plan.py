@@ -32,6 +32,7 @@ from app.services.budget_service import (
     get_ist_month,
 )
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
+from app.services.health_score_service import FORMULA_VERSION, HealthScoreResponse, compute_health_score
 from app.services.recurring_service import match_transaction_to_occurrence
 from app.services.statement_parser import (
     StatementParseError,
@@ -560,3 +561,59 @@ async def upsert_budget_plan(
     await db.commit()
     await db.refresh(new_plan)
     return _serialize_budget_plan(new_plan)
+
+
+class HealthInsuranceFlagRequest(BaseModel):
+    has_essential_insurance: bool | None = Field(
+        default=None,
+        description="Self-reported essential health/term insurance status (true, false, or null if unknown).",
+    )
+
+
+@router.get("/health-score", response_model=HealthScoreResponse)
+async def get_health_score_endpoint(
+    month: str | None = None,
+    formula_version: str | None = None,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> HealthScoreResponse:
+    """Compute deterministic, explainable, versioned Float Health Score and Float Path."""
+    res = await compute_health_score(
+        db,
+        current_user,
+        month=month,
+        formula_version=formula_version or FORMULA_VERSION,
+        record_snapshot=True,
+    )
+    await db.commit()
+    return res
+
+
+@router.put("/health-score/insurance", response_model=HealthScoreResponse)
+async def update_health_insurance_flag(
+    req: HealthInsuranceFlagRequest,
+    current_user: User = Depends(require_consent(ConsentType.TERMS)),
+    db: AsyncSession = Depends(get_db),
+) -> HealthScoreResponse:
+    """Update user-entered essential insurance flag and recompute Float Health Score."""
+    prefs = dict(current_user.notification_preferences or {})
+    if req.has_essential_insurance is None:
+        prefs.pop("has_essential_insurance", None)
+    else:
+        prefs["has_essential_insurance"] = bool(req.has_essential_insurance)
+    current_user.notification_preferences = prefs
+
+    db.add(
+        AuditTrail(
+            user_id=current_user.id,
+            actor=AuditActor.USER,
+            action="health_insurance_flag_updated",
+            resource_type="health_score",
+            resource_id=str(current_user.id),
+            metadata_json={"has_essential_insurance": req.has_essential_insurance},
+        )
+    )
+    await db.flush()
+    res = await compute_health_score(db, current_user, record_snapshot=True)
+    await db.commit()
+    return res

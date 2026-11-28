@@ -126,6 +126,11 @@ export const DICTIONARY = {
       deleteAccount: "Delete Account",
       graceNotice: "Account deletion scheduled",
     },
+    healthScore: {
+      title: "Float Health Score",
+      insufficientData: "Insufficient data",
+      bestNextAction: "Best next action",
+    },
   },
   ml: {
     nav: {
@@ -230,6 +235,12 @@ export const DICTIONARY = {
       deleteAccount: "അക്കൗണ്ട് ഇല്ലാതാക്കുക",
       graceNotice: "അക്കൗണ്ട് ഇല്ലാതാക്കൽ ഷെഡ്യൂൾ ചെയ്തു",
     },
+    // needsReview
+    healthScore: {
+      title: "ഫ്ലോട്ട് ഹെൽത്ത് സ്കോർ", // needsReview
+      insufficientData: "ആവശ്യമായ വിവരങ്ങൾ ഇല്ല", // needsReview
+      bestNextAction: "അടുത്ത മികച്ച ഘട്ടം", // needsReview
+    },
   },
   manglish: {
     nav: {
@@ -333,6 +344,12 @@ export const DICTIONARY = {
       downloadData: "Ente Data Download Cheyyuka",
       deleteAccount: "Account Delete Cheyyuka",
       graceNotice: "Account deletion schedule cheythu",
+    },
+    // needsReview
+    healthScore: {
+      title: "Float Health Score", // needsReview
+      insufficientData: "Insufficient data", // needsReview
+      bestNextAction: "Best next action", // needsReview
     },
   },
 } as const;

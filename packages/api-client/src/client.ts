@@ -32,6 +32,8 @@ import type {
   UploadStatementRequest,
   UserProfileResponse,
   VerifiedContact,
+  HealthScoreResponse,
+  HealthInsuranceFlagRequest,
 } from "./types.ts";
 
 export interface ClientConfig {
@@ -278,6 +280,18 @@ export class FloatApiClient {
 
     upsertBudget: (data: BudgetPlanUpsertRequest): Promise<BudgetPlanItem> =>
       this.request<BudgetPlanItem>("/api/v1/plan/budget", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
+    getHealthScore: (month?: string): Promise<HealthScoreResponse> =>
+      this.request<HealthScoreResponse>(
+        `/api/v1/plan/health-score${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+        { method: "GET" }
+      ),
+
+    updateHealthInsuranceFlag: (data: HealthInsuranceFlagRequest): Promise<HealthScoreResponse> =>
+      this.request<HealthScoreResponse>("/api/v1/plan/health-score/insurance", {
         method: "PUT",
         body: JSON.stringify(data),
       }),

@@ -901,6 +901,73 @@ async def handle_get_upcoming_bills(ctx: ToolContext, args: UpcomingBillsInput) 
     )
 
 
+class HealthScoreInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="IST month YYYY-MM")
+
+
+class HealthScoreToolData(BaseModel):
+    formula_version: str
+    month: str
+    overall_score: int | None
+    band: str
+    available_components: int
+    total_components: int
+    best_next_action: str | None
+    components: list[dict[str, Any]]
+
+
+async def handle_get_health_score(ctx: ToolContext, args: HealthScoreInput) -> ToolResult:
+    from app.models.user import User
+    from app.services.health_score_service import compute_health_score
+
+    u_res = await _execute(ctx.session, select(User).where(User.id == ctx.user_id))
+    user = u_res.scalar_one_or_none()
+    if user is None:
+        return ToolResult(ok=False, tool="get_health_score", data={"error": "User not found"})
+
+    res = await compute_health_score(ctx.session, user, month=args.month, record_snapshot=False)
+    best_title = res.best_next_action.title if res.best_next_action else None
+    facts = [
+        Fact(id="health_formula_version", label="Formula Version", value=res.formula_version, unit="version"),
+        Fact(id="health_band", label="Health Band", value=res.band, unit="band", period=res.month),
+        Fact(
+            id="health_available_components",
+            label="Available Components",
+            value=str(res.available_components),
+            unit="count",
+        ),
+    ]
+    if res.overall_score is not None:
+        facts.append(
+            Fact(
+                id="health_score",
+                label="Float Health Score",
+                value=str(res.overall_score),
+                unit="score_0_100",
+                period=res.month,
+            )
+        )
+    if best_title:
+        facts.append(Fact(id="best_next_action", label="Best Next Action", value=best_title, unit="step"))
+
+    return ToolResult(
+        ok=True,
+        tool="get_health_score",
+        data=HealthScoreToolData(
+            formula_version=res.formula_version,
+            month=res.month,
+            overall_score=res.overall_score,
+            band=res.band,
+            available_components=res.available_components,
+            total_components=res.total_components,
+            best_next_action=best_title,
+            components=[c.model_dump() for c in res.components],
+        ).model_dump(),
+        facts=facts,
+    )
+
+
 # ============================================================================
 # Tool Specifications and Registration
 # ============================================================================
@@ -997,6 +1064,17 @@ def register_financial_tools() -> None:
             input_model=UpcomingBillsInput,
             output_model=UpcomingBillsData,
             handler=handle_get_upcoming_bills,
+        ),
+        Tool(
+            name="get_health_score",
+            description=(
+                "Compute the deterministic, versioned Float Health Score (0-100), 6 component statuses "
+                "(savings rate, emergency fund months, DTI, budget adherence, subscriptions share, insurance flag), "
+                "and ordered Float Path next steps."
+            ),
+            input_model=HealthScoreInput,
+            output_model=HealthScoreToolData,
+            handler=handle_get_health_score,
         ),
     ]
 

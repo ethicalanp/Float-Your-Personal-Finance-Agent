@@ -472,3 +472,52 @@ export interface RecurringSuggestionItem {
   confidence: "high" | "medium";
   detected_occurrences_count: number;
 }
+
+// --- Float Health Score Types ---
+export interface HealthScoreComponent {
+  key: string;
+  label: string;
+  status: "available" | "insufficient_data";
+  score?: number | null;
+  weight: number;
+  value_display: string;
+  why: string;
+  educational_tip: string;
+}
+
+export interface FloatPathStep {
+  priority: number;
+  pillar: "Protect" | "Plan" | "Borrow-ready";
+  title: string;
+  why: string;
+  href: string;
+}
+
+export interface HealthScoreHistoryPoint {
+  recorded_at: string;
+  score?: number | null;
+  band: string;
+  formula_version: string;
+}
+
+export interface HealthScoreResponse {
+  formula_version: string;
+  month: string;
+  overall_score?: number | null;
+  band: "strong" | "steady" | "building" | "needs_attention" | "insufficient_data";
+  confidence: "high" | "medium" | "low";
+  available_components: number;
+  total_components: number;
+  has_essential_insurance?: boolean | null;
+  components: HealthScoreComponent[];
+  best_next_action?: FloatPathStep | null;
+  float_path: FloatPathStep[];
+  history: HealthScoreHistoryPoint[];
+  delta_from_previous?: number | null;
+  version_changed: boolean;
+  disclaimer: string;
+}
+
+export interface HealthInsuranceFlagRequest {
+  has_essential_insurance: boolean | null;
+}
