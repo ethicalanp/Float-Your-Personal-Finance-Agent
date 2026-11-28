@@ -25,6 +25,8 @@ from app.ai.tools.financial_tools import (
     CashFlowInput,
     CategoryBreakdownInput,
     ComparePeriodsInput,
+    EmergencyFundToolInput,
+    GoalsToolInput,
     HealthScoreInput,
     ListRecurringPaymentsInput,
     SpendingSummaryInput,
@@ -42,6 +44,8 @@ ALLOWED_TOOL_CATALOGUE = {
     "get_borrow_readiness": BorrowReadinessInput,
     "get_budget_plan": BudgetPlanInput,
     "get_health_score": HealthScoreInput,
+    "get_goals": GoalsToolInput,
+    "get_emergency_fund": EmergencyFundToolInput,
     "check_scam_message": CheckScamInput,
     "draft_complaint": DraftComplaintInput,
     "get_verified_contacts": GetVerifiedContactsInput,
@@ -67,6 +71,8 @@ You MUST propose a concise, valid JSON plan to address the user inquiry using ON
 10. search_knowledge(query, language, top_k)
 11. get_budget_plan(month)
 12. get_health_score(month)
+13. get_goals(month)
+14. get_emergency_fund(month)
 
 Rules:
 - Maximum 4 steps total.
@@ -205,8 +211,15 @@ def create_deterministic_plan(route: RouteClass, query: str) -> OrchestratorPlan
                     arguments={"start_date": str(start_date), "end_date": str(end_date), "bucket": "monthly"},
                 )
             )
+<<<<<<< HEAD
         elif any(w in q_lower for w in ("health score", "financial health", "float path")):
             tool_calls.append(ToolCallSpec(tool_name="get_health_score", arguments={}))
+=======
+        elif any(w in q_lower for w in ("emergency fund", "rainy day", "emergency buffer")):
+            tool_calls.append(ToolCallSpec(tool_name="get_emergency_fund", arguments={}))
+        elif any(w in q_lower for w in ("goal", "goals", "saving target")):
+            tool_calls.append(ToolCallSpec(tool_name="get_goals", arguments={}))
+>>>>>>> feature/goals-emergency
         elif any(w in q_lower for w in ("budget", "50/30/20", "split")):
             tool_calls.append(ToolCallSpec(tool_name="get_budget_plan", arguments={}))
         else:

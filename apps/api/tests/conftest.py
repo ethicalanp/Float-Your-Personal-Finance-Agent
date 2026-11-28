@@ -23,6 +23,7 @@ from app.models.admin import AdminUser
 from app.models.borrow import BorrowAssessment
 from app.models.budget import BudgetPlan
 from app.models.conversations import Conversation, Message
+from app.models.goals import EmergencyFundConfig, Goal
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import (
@@ -66,6 +67,8 @@ APP_TABLES = [
     RecurringNotification.__table__,
     BorrowAssessment.__table__,
     BudgetPlan.__table__,
+    Goal.__table__,
+    EmergencyFundConfig.__table__,
     AdminUser.__table__,
     Conversation.__table__,
     Message.__table__,

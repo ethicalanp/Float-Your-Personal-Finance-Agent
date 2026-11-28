@@ -968,6 +968,138 @@ async def handle_get_health_score(ctx: ToolContext, args: HealthScoreInput) -> T
     )
 
 
+class GoalsToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="IST month YYYY-MM")
+
+
+class GoalsToolData(BaseModel):
+    ist_month: str
+    goals_count: int
+    total_suggested_monthly_inr: Decimal
+    budget_savings_inr: Decimal | None
+    has_allocation_conflict: bool
+    shortfall_inr: Decimal
+    goals: list[dict[str, Any]]
+
+
+async def handle_get_goals(ctx: ToolContext, args: GoalsToolInput) -> ToolResult:
+    from app.services.goals_service import compute_goals_overview
+
+    ov = await compute_goals_overview(ctx.session, ctx.user_id, month=args.month)
+    tot_inr = paise_to_rupees(ov.total_suggested_monthly_paise)
+    sav_inr = paise_to_rupees(ov.budget_savings_paise) if ov.budget_savings_paise is not None else None
+    short_inr = paise_to_rupees(ov.shortfall_paise)
+    facts = [
+        Fact(id="goals_count", label="Active Goals", value=str(len(ov.goals)), unit="count", period=ov.ist_month),
+        Fact(
+            id="goals_suggested_monthly_inr",
+            label="Total Suggested Monthly Goal Savings",
+            value=str(tot_inr),
+            unit="INR",
+            period=ov.ist_month,
+        ),
+        Fact(
+            id="goals_allocation_conflict",
+            label="Allocation Conflict",
+            value=str(ov.has_allocation_conflict).lower(),
+            unit="boolean",
+            period=ov.ist_month,
+        ),
+    ]
+    if sav_inr is not None:
+        facts.append(
+            Fact(
+                id="budget_savings_inr",
+                label="Monthly Budget Savings Share",
+                value=str(sav_inr),
+                unit="INR",
+                period=ov.ist_month,
+            )
+        )
+    return ToolResult(
+        ok=True,
+        tool="get_goals",
+        data=GoalsToolData(
+            ist_month=ov.ist_month,
+            goals_count=len(ov.goals),
+            total_suggested_monthly_inr=tot_inr,
+            budget_savings_inr=sav_inr,
+            has_allocation_conflict=ov.has_allocation_conflict,
+            shortfall_inr=short_inr,
+            goals=[g.model_dump() for g in ov.goals],
+        ).model_dump(),
+        facts=facts,
+    )
+class EmergencyFundToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$", description="IST month YYYY-MM")
+
+
+class EmergencyFundToolData(BaseModel):
+    ist_month: str
+    target_months: int
+    essential_monthly_inr: Decimal
+    target_amount_inr: Decimal
+    effective_saved_inr: Decimal
+    remaining_inr: Decimal
+    progress_pct: float
+
+
+async def handle_get_emergency_fund(ctx: ToolContext, args: EmergencyFundToolInput) -> ToolResult:
+    from app.services.goals_service import compute_emergency_fund_overview
+
+    ef = await compute_emergency_fund_overview(ctx.session, ctx.user_id, month=args.month)
+    ess_inr = paise_to_rupees(ef.essential_monthly_paise)
+    tgt_inr = paise_to_rupees(ef.target_amount_paise)
+    sav_inr = paise_to_rupees(ef.effective_saved_paise)
+    rem_inr = paise_to_rupees(ef.remaining_paise)
+    return ToolResult(
+        ok=True,
+        tool="get_emergency_fund",
+        data=EmergencyFundToolData(
+            ist_month=ef.ist_month,
+            target_months=ef.target_months,
+            essential_monthly_inr=ess_inr,
+            target_amount_inr=tgt_inr,
+            effective_saved_inr=sav_inr,
+            remaining_inr=rem_inr,
+            progress_pct=ef.progress_pct,
+        ).model_dump(),
+        facts=[
+            Fact(
+                id="emergency_target_months",
+                label="Emergency Fund Target Months",
+                value=str(ef.target_months),
+                unit="months",
+                period=ef.ist_month,
+            ),
+            Fact(
+                id="emergency_target_inr",
+                label="Emergency Fund Target",
+                value=str(tgt_inr),
+                unit="INR",
+                period=ef.ist_month,
+            ),
+            Fact(
+                id="emergency_saved_inr",
+                label="Emergency Fund Saved",
+                value=str(sav_inr),
+                unit="INR",
+                period=ef.ist_month,
+            ),
+            Fact(
+                id="emergency_progress_pct",
+                label="Emergency Fund Progress",
+                value=str(ef.progress_pct),
+                unit="percent",
+                period=ef.ist_month,
+            ),
+        ],
+    )
+
+
+>>>>>>> feature/goals-emergency
 # ============================================================================
 # Tool Specifications and Registration
 # ============================================================================
@@ -1075,6 +1207,26 @@ def register_financial_tools() -> None:
             input_model=HealthScoreInput,
             output_model=HealthScoreToolData,
             handler=handle_get_health_score,
+        ),
+        Tool(
+            name="get_goals",
+            description=(
+                "List user savings goals with suggested monthly savings (paise/INR), feasibility against "
+                "budget savings share, and any multi-goal allocation conflicts."
+            ),
+            input_model=GoalsToolInput,
+            output_model=GoalsToolData,
+            handler=handle_get_goals,
+        ),
+        Tool(
+            name="get_emergency_fund",
+            description=(
+                "Retrieve emergency fund target (target months x essential monthly expenses from needs + recurring), "
+                "saved liquid balance, and progress percentage."
+            ),
+            input_model=EmergencyFundToolInput,
+            output_model=EmergencyFundToolData,
+            handler=handle_get_emergency_fund,
         ),
     ]
 

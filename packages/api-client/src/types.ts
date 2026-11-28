@@ -473,51 +473,70 @@ export interface RecurringSuggestionItem {
   detected_occurrences_count: number;
 }
 
-// --- Float Health Score Types ---
-export interface HealthScoreComponent {
-  key: string;
-  label: string;
-  status: "available" | "insufficient_data";
-  score?: number | null;
-  weight: number;
-  value_display: string;
-  why: string;
-  educational_tip: string;
-}
-
-export interface FloatPathStep {
+// --- Goals & Emergency Fund Types ---
+export interface GoalItemOut {
+  id: string;
+  name: string;
+  target_amount_paise: number;
+  saved_paise: number;
+  over_saved_paise: number;
+  remaining_paise: number;
+  target_date: string;
   priority: number;
-  pillar: "Protect" | "Plan" | "Borrow-ready";
-  title: string;
-  why: string;
-  href: string;
+  version: number;
+  months_remaining: number;
+  is_past_due: boolean;
+  is_funded: boolean;
+  suggested_monthly_paise: number;
+  allocated_monthly_paise: number;
+  feasible: boolean;
+  progress_pct: number;
 }
 
-export interface HealthScoreHistoryPoint {
-  recorded_at: string;
-  score?: number | null;
-  band: string;
-  formula_version: string;
+export interface GoalsOverviewResponse {
+  ist_month: string;
+  budget_savings_paise?: number | null;
+  total_suggested_monthly_paise: number;
+  has_allocation_conflict: boolean;
+  shortfall_paise: number;
+  goals: GoalItemOut[];
 }
 
-export interface HealthScoreResponse {
-  formula_version: string;
-  month: string;
-  overall_score?: number | null;
-  band: "strong" | "steady" | "building" | "needs_attention" | "insufficient_data";
-  confidence: "high" | "medium" | "low";
-  available_components: number;
-  total_components: number;
-  has_essential_insurance?: boolean | null;
-  components: HealthScoreComponent[];
-  best_next_action?: FloatPathStep | null;
-  float_path: FloatPathStep[];
-  history: HealthScoreHistoryPoint[];
-  delta_from_previous?: number | null;
-  version_changed: boolean;
-  disclaimer: string;
+export interface CreateGoalRequest {
+  name: string;
+  target_amount_paise: number;
+  saved_paise?: number;
+  target_date: string;
+  priority?: number;
 }
 
-export interface HealthInsuranceFlagRequest {
-  has_essential_insurance: boolean | null;
+export interface UpdateGoalRequest {
+  name?: string;
+  target_amount_paise?: number;
+  saved_paise?: number;
+  target_date?: string;
+  priority?: number;
+  expected_version?: number;
+}
+
+export interface EmergencyFundResponse {
+  ist_month: string;
+  target_months: number;
+  needs_paise: number;
+  essential_recurring_paise: number;
+  essential_monthly_paise: number;
+  target_amount_paise: number;
+  saved_paise: number;
+  liquid_accounts_paise: number;
+  effective_saved_paise: number;
+  over_saved_paise: number;
+  remaining_paise: number;
+  progress_pct: number;
+  version: number;
+}
+
+export interface UpdateEmergencyFundRequest {
+  target_months: number;
+  saved_paise: number;
+  expected_version?: number;
 }

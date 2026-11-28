@@ -32,8 +32,11 @@ import type {
   UploadStatementRequest,
   UserProfileResponse,
   VerifiedContact,
-  HealthScoreResponse,
-  HealthInsuranceFlagRequest,
+  GoalsOverviewResponse,
+  CreateGoalRequest,
+  UpdateGoalRequest,
+  EmergencyFundResponse,
+  UpdateEmergencyFundRequest,
 } from "./types.ts";
 
 export interface ClientConfig {
@@ -284,14 +287,37 @@ export class FloatApiClient {
         body: JSON.stringify(data),
       }),
 
-    getHealthScore: (month?: string): Promise<HealthScoreResponse> =>
-      this.request<HealthScoreResponse>(
-        `/api/v1/plan/health-score${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+    getGoals: (month?: string): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>(
+        `/api/v1/plan/goals${month ? `?month=${encodeURIComponent(month)}` : ""}`,
         { method: "GET" }
       ),
 
-    updateHealthInsuranceFlag: (data: HealthInsuranceFlagRequest): Promise<HealthScoreResponse> =>
-      this.request<HealthScoreResponse>("/api/v1/plan/health-score/insurance", {
+    createGoal: (data: CreateGoalRequest): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>("/api/v1/plan/goals", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    updateGoal: (goalId: string, data: UpdateGoalRequest): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>(`/api/v1/plan/goals/${goalId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
+    deleteGoal: (goalId: string): Promise<GoalsOverviewResponse> =>
+      this.request<GoalsOverviewResponse>(`/api/v1/plan/goals/${goalId}`, {
+        method: "DELETE",
+      }),
+
+    getEmergencyFund: (month?: string): Promise<EmergencyFundResponse> =>
+      this.request<EmergencyFundResponse>(
+        `/api/v1/plan/emergency-fund${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+        { method: "GET" }
+      ),
+
+    updateEmergencyFund: (data: UpdateEmergencyFundRequest): Promise<EmergencyFundResponse> =>
+      this.request<EmergencyFundResponse>("/api/v1/plan/emergency-fund", {
         method: "PUT",
         body: JSON.stringify(data),
       }),
