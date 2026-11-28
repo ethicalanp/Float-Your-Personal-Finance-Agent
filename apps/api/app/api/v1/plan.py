@@ -23,6 +23,7 @@ from app.models.enums import (
 from app.models.goals import EmergencyFundConfig, Goal
 from app.models.plan import Account, Transaction, TransactionImport
 from app.models.protect import AuditTrail
+from app.models.subscriptions_networth import NetWorthItem, NetWorthSnapshot, SubscriptionLeakDecision
 from app.models.user import User
 from app.services.budget_service import (
     BUDGET_PRESETS,
@@ -32,7 +33,14 @@ from app.services.budget_service import (
     compute_plan_vs_actual,
     get_ist_month,
 )
-from app.services.calculators_service import InsuranceGapResponse, SipProjectionResponse, TaxComparisonResponse, calculate_insurance_gap, calculate_sip_projection, compare_tax_regimes
+from app.services.calculators_service import (
+    InsuranceGapResponse,
+    SipProjectionResponse,
+    TaxComparisonResponse,
+    calculate_insurance_gap,
+    calculate_sip_projection,
+    compare_tax_regimes,
+)
 from app.services.cash_flow import compute_financial_insights, compute_monthly_cash_flow
 from app.services.goals_service import (
     EmergencyFundResponse,
@@ -41,13 +49,17 @@ from app.services.goals_service import (
     compute_goals_overview,
 )
 from app.services.health_score_service import FORMULA_VERSION, HealthScoreResponse, compute_health_score
-from app.models.subscriptions_networth import NetWorthItem, NetWorthSnapshot, SubscriptionLeakDecision
 from app.services.recurring_service import match_transaction_to_occurrence
-from app.services.subscriptions_networth_service import NetWorthOverviewResponse, SubscriptionLeaksResponse, compute_net_worth_overview, compute_subscription_leaks
 from app.services.statement_parser import (
     StatementParseError,
     parse_csv_statement,
     parse_sms_statement,
+)
+from app.services.subscriptions_networth_service import (
+    NetWorthOverviewResponse,
+    SubscriptionLeaksResponse,
+    compute_net_worth_overview,
+    compute_subscription_leaks,
 )
 
 router = APIRouter(prefix="/plan", tags=["Plan — Personal Finance Management"])
@@ -573,7 +585,6 @@ async def upsert_budget_plan(
     return _serialize_budget_plan(new_plan)
 
 
-<<<<<<< HEAD
 class HealthInsuranceFlagRequest(BaseModel):
     has_essential_insurance: bool | None = Field(
         default=None,
@@ -613,6 +624,7 @@ async def update_health_insurance_flag(
     else:
         prefs["has_essential_insurance"] = bool(req.has_essential_insurance)
     current_user.notification_preferences = prefs
+
     db.add(
         AuditTrail(
             user_id=current_user.id,
@@ -717,6 +729,7 @@ async def update_goal_endpoint(
     if req.priority is not None:
         goal.priority = req.priority
     goal.version += 1
+
     db.add(
         AuditTrail(
             user_id=current_user.id,
@@ -807,7 +820,6 @@ async def update_emergency_fund_endpoint(
     )
     await db.commit()
     return await compute_emergency_fund_overview(db, current_user.id)
->>>>>>> feature/goals-emergency
 
 
 class LeakDecisionRequest(BaseModel):

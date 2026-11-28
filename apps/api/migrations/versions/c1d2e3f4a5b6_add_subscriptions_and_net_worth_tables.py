@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c1d2e3f4a5b6"
-down_revision: str | Sequence[str] | None = "a9b8c7d6e5f4"
+down_revision: str | Sequence[str] | None = "b1c2d3e4f5a6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
